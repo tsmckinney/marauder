@@ -1,7 +1,7 @@
 [package]
 name = "marauder_macros"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 repository = "https://github.com/steele123/mem-rs"
 categories = ["games"]
 description = "A macro for generating DLLs for memory hacking"
