@@ -11,7 +11,7 @@ license = "MIT"
 keywords = ["memory", "cheat", "hack", "dll", "injection"]
 
 [dependencies]
-marauder-macros = { path = "../macros", optional = true, version = "0.1.0" }
+marauder_macros = { path = "../macros", optional = true, version = "0.1.0" }
 thiserror = "1.0.50"
 
 [dependencies.windows]
@@ -51,7 +51,7 @@ d3d11 = []
 d3d12 = []
 opengl = []
 vulkan = []
-macros = ["marauder-macros"]
+macros = ["marauder_macros"]
 
 [[example]]
 name = "tokio_dll"
