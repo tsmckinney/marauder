@@ -192,10 +192,9 @@ fn with_dummy_window(method: impl FnOnce(HWND) -> Result<MethodTable>) -> Result
 
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
-            let method_table = unsafe {
-                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS)
-            }
-            .to_vec();
+            let method_table =
+                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS) }
+                    .to_vec();
             if method_table.is_empty() {
                 Err(Error::DummyDevice)
             }
@@ -248,10 +247,9 @@ fn with_dummy_window(method: impl FnOnce(HWND) -> Result<MethodTable>) -> Result
             .unwrap();
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
-            let method_table = unsafe {
-                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
-            }
-            .to_vec();
+            let method_table =
+                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
+                    .to_vec();
             if method_table.is_empty() {
                 Err(Error::DummyDevice)
             }
@@ -309,17 +307,12 @@ fn with_dummy_window(method: impl FnOnce(HWND) -> Result<MethodTable>) -> Result
                 .unwrap()
                 .CreateSwapChain(command_queue, &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC)
                 .unwrap();
-            D3D12CreateDevice(
-                null_mut(),
-                feature_level,
-                device
-            );
+            D3D12CreateDevice(null_mut(), feature_level, device);
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
-            let method_table = unsafe {
-                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
-            }
-            .to_vec();
+            let method_table =
+                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
+                    .to_vec();
             if method_table.is_empty() {
                 Err(Error::DummyDevice)
             }
