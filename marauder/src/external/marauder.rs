@@ -34,7 +34,7 @@ impl Mem {
         let process_id = get_process_id(process_name)?;
         let module_base_address = get_module_base(process_id, process_name)?;
 
-        let process = open_process(PROCESS_ALL_ACCESS, false.into(), process_id);
+        let process = open_process(PROCESS_ALL_ACCESS, false.into(), process_id)?;
 
         if process.is_null() {
             return Err(std::io::Error::last_os_error().into());

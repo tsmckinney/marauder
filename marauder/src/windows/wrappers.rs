@@ -4,7 +4,7 @@
 //! Not all functions are designated as safe as without adding a significant
 //! amount of boilerplate will always be up to the caller to make sure UB can't
 //! happen. As time goes on we'll try to make as little functions unsafe.
-use std::{os::raw::c_void};
+use std::os::raw::c_void;
 
 use windows::Win32::{
     Foundation::{CloseHandle, GetLastError, HANDLE, HINSTANCE, HMODULE, WAIT_EVENT},
@@ -14,15 +14,18 @@ use windows::Win32::{
         Diagnostics::{
             Debug::{ReadProcessMemory, WriteProcessMemory},
             ToolHelp::{
-                CREATE_TOOLHELP_SNAPSHOT_FLAGS, CreateToolhelp32Snapshot, MODULEENTRY32, Module32First, Module32Next, PROCESSENTRY32, Process32First, Process32Next
+                CREATE_TOOLHELP_SNAPSHOT_FLAGS, CreateToolhelp32Snapshot, MODULEENTRY32, Module32First, Module32Next,
+                PROCESSENTRY32, Process32First, Process32Next,
             },
         },
         LibraryLoader::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleA, GetProcAddress},
         Memory::{
-            MEMORY_BASIC_INFORMATION, PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE, VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx
+            MEMORY_BASIC_INFORMATION, PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE, VirtualAllocEx,
+            VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx,
         },
         Threading::{
-            CreateRemoteThread, CreateThread, GetCurrentProcess, GetProcessId, LPTHREAD_START_ROUTINE, OpenProcess, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS, WaitForSingleObject
+            CreateRemoteThread, CreateThread, GetCurrentProcess, GetProcessId, LPTHREAD_START_ROUTINE, OpenProcess,
+            PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS, WaitForSingleObject,
         },
     },
     UI::Input::KeyboardAndMouse::GetAsyncKeyState,
@@ -77,16 +80,16 @@ pub type VirtualFreeType = VIRTUAL_FREE_TYPE;
 /// A type of memory allocation which could be a reserve, commit or change to a
 /// region in the virtual memory.
 pub type VirtualAllocationType = VIRTUAL_ALLOCATION_TYPE;
-/// `SecurityAttributes` of a thread it will determine whether the return
-/// `Handle` can be inherited by the child processes. If this is null it will
-/// get a default by the system.
+/// `SecurityAttributes` of a thread will determine whether the return
+/// `Handle` can be inherited by the child processes. If this is null,
+/// it will get a default assigned by the system.
 pub type SecurityAttributes = SECURITY_ATTRIBUTES;
 /// A pointer to a function that will serve as the starting address for a
 /// thread.
 pub type LPThreadStartRoutine = LPTHREAD_START_ROUTINE;
 /// Flags that control the creation of a thread.
 pub type ThreadCreationFlags = THREAD_CREATION_FLAGS;
-/// Access rights that the system will give you to the process, this is meant to
+/// Access rights that the system will give you to the process. This is meant to
 /// be used with the `open_process` function which will open the process with
 /// the provided access rights.
 pub type ProcessAccessRights = PROCESS_ACCESS_RIGHTS;
@@ -95,40 +98,41 @@ pub type ProcessAccessRights = PROCESS_ACCESS_RIGHTS;
 /// taken.
 pub type ProcessEntry32 = PROCESSENTRY32;
 /// `CreateToolhelpSnapshotFlags` are flags to indicate which parts of the
-/// system should be included in the snapshot for example you would use the flag
-/// `TH32CS_SNAPMODULE` to include the modules of the process.
+/// system should be included in the snapshot.
+/// For example, you would use `TH32CS_SNAPMODULE` to include the
+/// modules of the process.
 pub type CreateToolhelpSnapshotFlags = CREATE_TOOLHELP_SNAPSHOT_FLAGS;
-/// `ModuleEntry32` is used for crawling the modules of a process in most cases
-/// you will be just default its value dwSize because not initializing dwSize
-/// will make `module32_first` fail.
+/// `ModuleEntry32` is used to crawl the modules of a process.
+///
+/// Before calling `module32_first`, set its dwSize member to
+/// this type's size; otherwise, the function *will fail.*
 pub type ModuleEntry32 = MODULEENTRY32;
 
 /// `get_module_handle` will get the handle of a module.
 ///
 /// # Errors
-/// If the `hInstance` returned is NULL a `Error::Handle` is returned.
+/// If the `hModule` returned is NULL a `Error::Handle` is returned.
+/// Otherwise, if the `hModule` fails to unwrap
 pub fn get_module_handle(module_name: &str) -> Result<HandleModule, Error> {
     let hmodule: Result<HMODULE, windows::core::Error> = unsafe { GetModuleHandleA(PCSTR::from_raw(module_name.as_ptr())) };
 
-    if hmodule.is_err() {
-        Err(Error::Handle(unsafe { GetLastError().0 }))
-    } else {
-        Ok(hmodule.unwrap())
-    }
+    hmodule.map_or_else(|_| Err(Error::Handle(unsafe { GetLastError().0 })), Ok)
 }
 
-/// `get_module_handle` will get the handle of a module.
+/// `get_instance_handle` will get the handle of an instance.
 ///
 /// # Errors
 /// If the `hInstance` returned is NULL a `Error::Handle` is returned.
 pub fn get_instance_handle(module_name: &str) -> Result<HandleInstance, Error> {
-    let hinstance: Result<HINSTANCE, windows::core::Error> = unsafe { Ok(HINSTANCE(GetModuleHandleA(PCSTR::from_raw(module_name.as_ptr())).unwrap().0)) };
+    let hinstance = unsafe { GetModuleHandleA(PCSTR::from_raw(module_name.as_ptr())) };
 
-    if hinstance.is_err() {
-        Err(Error::Handle(unsafe { GetLastError().0 }))
-    } else {
-        Ok(hinstance.unwrap())
-    }
+    hinstance.map_or_else(
+        |_| Err(Error::Handle(unsafe { GetLastError().0 })),
+        |handle| {
+            let hinst = HINSTANCE(handle.0);
+            Ok(hinst)
+        },
+    )
 }
 
 /// Retrieves information about a range of pages within the virtual address
@@ -162,7 +166,9 @@ pub fn virtual_query_ex(
 /// previous call to `get_async_key_state`. However, you should not rely on this
 /// last behavior.
 #[must_use]
-pub fn get_async_key_state(key: i32) -> i16 { unsafe { GetAsyncKeyState(key) } }
+pub fn get_async_key_state(key: i32) -> i16 {
+    unsafe { GetAsyncKeyState(key) }
+}
 
 /// Changes the protection on a region of committed pages in the virtual address
 /// space of a specified process.
@@ -255,11 +261,7 @@ pub fn create_remote_thread(
         )
     };
 
-    if handle.is_err() {
-        Err(Error::ProcessError(unsafe { GetLastError().0 }))
-    } else {
-        Ok(handle.unwrap())
-    }
+    handle.map_or_else(|_| Err(Error::ProcessError(unsafe { GetLastError().0 })), Ok)
 }
 
 /// Creates a thread to execute within the virtual address space of the calling
@@ -292,11 +294,7 @@ pub fn create_thread(
         )
     };
 
-    if res.is_err() {
-        Err(Error::ProcessError(unsafe { GetLastError().0 }))
-    } else {
-        Ok(res.unwrap())
-    }
+    res.map_or_else(|_| Err(Error::ProcessError(unsafe { GetLastError().0 })), Ok)
 }
 
 /// Closes an open object handle.
@@ -315,12 +313,13 @@ pub fn close_handle(handle: Handle) -> Result<(), Error> {
 
 /// Retrieves a pseudo handle for the current process.
 #[must_use]
-pub fn get_current_process() -> Handle { unsafe { GetCurrentProcess() } }
+pub fn get_current_process() -> Handle {
+    unsafe { GetCurrentProcess() }
+}
 
 /// Allocates a console for the calling process. A process is only able to have
-/// one console, this function will fail if it already has a console. If you
-/// want to get rid of the existing console you should call our `free_console`
-/// function.
+/// one console; otherwise, this function will fail. Make sure all other consoles
+/// are freed first.
 /// # Errors
 pub fn alloc_console() -> Result<(), Error> {
     let success = unsafe { AllocConsole() };
@@ -344,10 +343,9 @@ pub fn free_console() -> Result<(), Error> {
     }
 }
 
-/// Firstly `FreeLibrary` is called which frees the DLL and if needed decrements
-/// the reference count, when the reference count reaches zero the module will
-/// be unloaded from the address space and the handle will no longer be valid
-/// then `ExitThread` will be called to terminate the calling thread.
+/// This function first frees the DLL and (if needed) decrements the reference
+/// count. When the reference count reaches zero, the module will be unloaded.
+/// The calling thread will then be terminated.
 pub fn free_library_and_exit_thread(module_handle: HandleModule, exit_code: DWORD) {
     unsafe {
         FreeLibraryAndExitThread(module_handle, exit_code);
@@ -355,9 +353,12 @@ pub fn free_library_and_exit_thread(module_handle: HandleModule, exit_code: DWOR
 }
 
 /// Opens an existing local process object.
-#[must_use]
-pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, process_id: DWORD) -> Handle {
-    unsafe { OpenProcess(desired_access, inherit_handle, process_id).unwrap() }
+///
+/// # Errors
+/// If the function fails, `Error::Handle` is returned.
+pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, process_id: DWORD) -> Result<Handle, Error> {
+    let proc_handle = unsafe { OpenProcess(desired_access, inherit_handle, process_id) };
+    proc_handle.map_or_else(|_| Err(Error::Handle(unsafe { GetLastError().0 })), Ok)
 }
 
 /// Takes a snapshot of the specified processes, as well as the heaps, modules,
@@ -367,11 +368,7 @@ pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, p
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn create_tool_help32_snapshot(flags: CreateToolhelpSnapshotFlags, process_id: DWORD) -> Result<Handle, Error> {
     let res = unsafe { CreateToolhelp32Snapshot(flags, process_id) };
-    if res.is_err() {
-        Err(Error::MemoryError(unsafe { GetLastError().0 }))
-    } else {
-        Ok(res.unwrap())
-    }
+    res.map_or_else(|_| Err(Error::MemoryError(unsafe { GetLastError().0 })), Ok)
 }
 
 /// Retrieves information about the first module associated with a process.
@@ -440,15 +437,7 @@ pub fn write_process_memory(
     size: size_t,
     number_of_bytes_written: Option<*mut size_t>,
 ) -> Result<(), Error> {
-    let result = unsafe {
-        WriteProcessMemory(
-            process_handle,
-            base_address,
-            buffer,
-            size,
-            number_of_bytes_written,
-        )
-    };
+    let result = unsafe { WriteProcessMemory(process_handle, base_address, buffer, size, number_of_bytes_written) };
     if result.is_ok() {
         Ok(())
     } else {
@@ -481,8 +470,8 @@ pub fn read_process_memory(
 /// # Errors
 /// If the function fails, `Error::ProcessAddress` is returned.
 pub fn get_proc_address(hmodule: HMODULE, lpprocname: &str) -> Result<usize, Error> {
-    let function_address =
-        unsafe { GetProcAddress(hmodule, PCSTR::from_raw(lpprocname.as_ptr())) }.ok_or_else(|| Error::ProcessAddress(unsafe { GetLastError().0 }))?;
+    let function_address = unsafe { GetProcAddress(hmodule, PCSTR::from_raw(lpprocname.as_ptr())) }
+        .ok_or_else(|| Error::ProcessAddress(unsafe { GetLastError().0 }))?;
 
     Ok(function_address as usize)
 }

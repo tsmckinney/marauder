@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemFn};
+use syn::ItemFn;
 
 #[proc_macro_attribute]
 pub fn dll_main(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -20,10 +20,10 @@ pub fn dll_main(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let is_async = input.sig.asyncness.take().is_some();
 
-    unsafe { create_main(input, args, is_async).unwrap_or_else(|e| e.to_compile_error().into())}
+    unsafe { create_main(input, args, is_async).unwrap_or_else(|e| e.to_compile_error().into()) }
 }
 
-unsafe fn create_main(mut input: ItemFn, args: TokenStream, is_async: bool) -> Result<TokenStream, syn::Error> {
+unsafe fn create_main(mut input: ItemFn, _args: TokenStream, is_async: bool) -> Result<TokenStream, syn::Error> {
     let original_body = &input.block;
     let brace_token = input.block.brace_token;
     if !is_async {

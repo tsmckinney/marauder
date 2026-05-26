@@ -1,14 +1,12 @@
 use std::{ffi::CStr, mem::size_of};
 
-use windows::Win32::{
-    System::Diagnostics::ToolHelp::{TH32CS_SNAPMODULE, TH32CS_SNAPPROCESS},
-};
+use windows::Win32::System::Diagnostics::ToolHelp::{TH32CS_SNAPMODULE, TH32CS_SNAPPROCESS};
 
 use crate::{
     error::Error,
     windows::wrappers::{
-        close_handle, create_tool_help32_snapshot, module32_first, module32_next, process32_first, process32_next,
-        ModuleEntry32, ProcessEntry32, DWORD, DWORD_PTR,
+        DWORD, DWORD_PTR, ModuleEntry32, ProcessEntry32, close_handle, create_tool_help32_snapshot, module32_first,
+        module32_next, process32_first, process32_next,
     },
 };
 

@@ -6,8 +6,8 @@ use windows::Win32::System::{
 use crate::{
     error::Error,
     windows::wrappers::{
-        close_handle, create_remote_thread, get_module_handle, get_proc_address, open_process, virtual_alloc_ex,
-        write_process_memory, DWORD, LPVOID,
+        DWORD, LPVOID, close_handle, create_remote_thread, get_module_handle, get_proc_address, open_process,
+        virtual_alloc_ex, write_process_memory,
     },
 };
 
@@ -15,12 +15,12 @@ use crate::{
 pub enum InjectionMethod {
     /// This is the typical method when safety is not really a concern
     LoadLibrary,
-    /// LoadLibraryEx is just a extended version of LoadLibrary which isn't
+    /// `LoadLibraryEx` is just a extended version of `LoadLibrary` which isn't
     /// always detected by anti-cheats
     LoadLibraryEx,
     /// By far the safest method of injection, this does mostly what the other
     /// methods do but is instead just manually done by us rather than
-    /// windows functions thus you are hidden from ToolHelp32Snapshot and
+    /// windows functions thus you are hidden from `ToolHelp32Snapshot` and
     /// module crawling because windows didn't load them
     ManualMap,
 }
@@ -28,7 +28,7 @@ pub enum InjectionMethod {
 /// These are methods in which the injector will execute the code from the DLL
 /// that is injected
 pub enum CodeExecutionMethod {
-    /// Creates a new thread on the target process which will have DllMain
+    /// Creates a new thread on the target process which will have `DllMain`
     /// called
     CreateRemoteThread,
     /// Hijacks an existing thread, this is used for stealth if the anti cheat
@@ -86,13 +86,15 @@ pub struct Injector {
 
 impl Injector {
     #[must_use]
-    pub const fn new(config: Config) -> Self { Self { config } }
+    pub const fn new(config: Config) -> Self {
+        Self { config }
+    }
 
     /// # Errors
     pub fn inject(&self, process_id: u32, dll_path: &str) -> Result<(), Error> {
         let load_lib_address = get_proc_address(get_module_handle("Kernel32.dll")?, "LoadLibraryA")?;
-        let dll_path_size = dll_path.as_bytes().len();
-        let process_handle = open_process(PROCESS_ALL_ACCESS, false, process_id);
+        let dll_path_size = dll_path.len();
+        let process_handle = open_process(PROCESS_ALL_ACCESS, false, process_id)?;
         let path = virtual_alloc_ex(process_handle, None, dll_path_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)?;
 
         match self.config.execution_method {
@@ -105,10 +107,10 @@ impl Injector {
                 };
 
                 close_handle(thread_handle)?;
-            }
+            },
             CodeExecutionMethod::ThreadHijack => {
                 todo!()
-            }
+            },
         }
 
         Ok(())

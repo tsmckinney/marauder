@@ -1,7 +1,7 @@
 //! This example is a very basic DLL that will be injected into the process and
 //! print to stdout
 
-use marauder::windows::wrappers::{HandleInstance, DWORD, LPVOID};
+use marauder::windows::wrappers::{DWORD, HandleInstance, LPVOID};
 
 fn hack_thread() {
     println!("Hi from the sample dll");

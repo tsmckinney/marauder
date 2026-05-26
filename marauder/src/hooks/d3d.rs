@@ -6,28 +6,28 @@ use std::{
 use windows::Win32::{
     Foundation::HWND,
     Graphics::{
-        Direct3D10::{D3D10CreateDeviceAndSwapChain, D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION},
+        Direct3D9::{
+            D3D_SDK_VERSION, D3DCREATE_SOFTWARE_VERTEXPROCESSING, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE,
+            D3DPRESENT_PARAMETERS, D3DSWAPEFFECT_DISCARD, Direct3DCreate9, IDirect3D9, IDirect3DDevice9,
+        },
+        Direct3D10::{D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION, D3D10CreateDeviceAndSwapChain},
         Direct3D11::{
-            D3D11CreateDeviceAndSwapChain, D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION, D3D_DRIVER_TYPE_HARDWARE,
-            D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0,
+            D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0,
+            D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION, D3D11CreateDeviceAndSwapChain,
         },
         Direct3D12::{
-            D3D12CreateDevice, ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Device, ID3D12GraphicsCommandList,
-            D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
-        },
-        Direct3D9::{
-            Direct3DCreate9, IDirect3D9, IDirect3DDevice9, D3DCREATE_SOFTWARE_VERTEXPROCESSING, D3DDEVTYPE_HAL,
-            D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE, D3DPRESENT_PARAMETERS, D3DSWAPEFFECT_DISCARD, D3D_SDK_VERSION,
+            D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE, D3D12CreateDevice,
+            ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Device, ID3D12GraphicsCommandList,
         },
         Dxgi::{
-            CreateDXGIFactory, IDXGIAdapter, IDXGIFactory, DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC,
-            DXGI_MODE_SCALING, DXGI_MODE_SCALING_UNSPECIFIED, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_RATIONAL,
-            DXGI_SAMPLE_DESC, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, DXGI_SWAP_EFFECT_DISCARD,
-            DXGI_SWAP_EFFECT_FLIP_DISCARD,
+            CreateDXGIFactory, DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC, DXGI_MODE_SCALING,
+            DXGI_MODE_SCALING_UNSPECIFIED, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
+            DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, DXGI_SWAP_EFFECT_DISCARD,
+            DXGI_SWAP_EFFECT_FLIP_DISCARD, IDXGIAdapter, IDXGIFactory,
         },
     },
     UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, UnregisterClassW, CS_HREDRAW, CS_VREDRAW, WNDCLASSEXW, WS_EX_APPWINDOW,
+        CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DestroyWindow, UnregisterClassW, WNDCLASSEXW, WS_EX_APPWINDOW,
         WS_OVERLAPPEDWINDOW,
     },
 };
@@ -37,7 +37,7 @@ use crate::{
     hooks::{MethodTable, RenderType},
     windows::{
         utils::convert_windows_string,
-        wrappers::{get_module_handle, get_proc_address, HandleInstance},
+        wrappers::{HandleInstance, get_module_handle, get_proc_address},
     },
 };
 
