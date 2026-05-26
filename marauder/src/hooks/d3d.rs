@@ -176,6 +176,18 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 device,
             )
             .unwrap();
+
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
+
+            Ok(method_table)
         },
         RenderType::D3D11 => unsafe {
             let feature_levels = vec![D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0];
@@ -221,8 +233,18 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 context,
             )
             .unwrap();
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
         },
         RenderType::D3D12 => unsafe {
+            let feature_level = D3D_FEATURE_LEVEL_11_0;
             let factory = CreateDXGIFactory::<IDXGIFactory>();
             let adapter = factory.unwrap().EnumAdapters();
             let device = D3D12CreateDevice::<ID3D12Device>(adapter, D3D_FEATURE_LEVEL_11_0);
@@ -269,10 +291,25 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
             };
+            let device = null_mut();
             let swap_chain = factory
                 .unwrap()
                 .CreateSwapChain(command_queue, &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC)
                 .unwrap();
+            D3D12CreateDevice(
+                null_mut(),
+                feature_level,
+                device
+            );
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
         },
         _ => unreachable!(),
     };
