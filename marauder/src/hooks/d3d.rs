@@ -96,9 +96,240 @@ fn with_dummy_window(method: impl FnOnce(HWND) -> Result<MethodTable>) -> Result
     }
     .map_err(|_| Error::DummyDevice)?;
 
-    let result = method(window);
-    destroy_class(&window_class, window);
-    result
+    let method_table = match render_type {
+        RenderType::D3D9 => {
+            let direct3d9 = unsafe { Direct3DCreate9(D3D_SDK_VERSION).unwrap() };
+            let params = D3DPRESENT_PARAMETERS {
+                BackBufferWidth: 0,
+                BackBufferHeight: 0,
+                BackBufferFormat: D3DFMT_UNKNOWN,
+                BackBufferCount: 0,
+                MultiSampleType: D3DMULTISAMPLE_NONE,
+                MultiSampleQuality: 0,
+                SwapEffect: D3DSWAPEFFECT_DISCARD,
+                hDeviceWindow: window,
+                Windowed: true.into(),
+                EnableAutoDepthStencil: false.into(),
+                AutoDepthStencilFormat: D3DFMT_UNKNOWN,
+                Flags: 0,
+                FullScreen_RefreshRateInHz: 0,
+                PresentationInterval: 0,
+            };
+            let device_interface: *mut IDirect3DDevice9 = std::ptr::null_mut();
+            let dummy_device = unsafe {
+                direct3d9.CreateDevice(
+                    0u32,
+                    D3DDEVTYPE_HAL,
+                    params.hDeviceWindow,
+                    32u32 | 256u32,
+                    std::mem::transmute(params),
+                    std::mem::transmute(device_interface),
+                )
+            };
+
+            if dummy_device.is_err() {
+                Err(Error::DummyDevice)
+            }
+
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device_interface as *const *const MethodTable).read(), D3D9_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
+
+            Ok(method_table)
+        },
+        RenderType::D3D10 => unsafe {
+            let factory = CreateDXGIFactory::<IDXGIFactory>();
+            if factory.is_err() {
+                return Err(Error::DummyDevice);
+            }
+            let adapter: *const IDXGIAdapter = null();
+            factory.unwrap().EnumAdapters(&adapter as u32);
+            let refresh_rate = DXGI_RATIONAL {
+                Numerator: 60,
+                Denominator: 1,
+            };
+
+            let buffer_desc = DXGI_MODE_DESC {
+                Width: 100,
+                Height: 100,
+                RefreshRate: refresh_rate,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                ScanlineOrdering: DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
+            };
+            let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
+            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+                BufferDesc: buffer,
+                SampleDesc: sample,
+                BufferUsage: 32,
+                BufferCount: 1,
+                OutputWindow: window,
+                Windowed: true.into(),
+                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
+            };
+
+            let swap_chain = null_mut();
+            let device = null_mut();
+
+            D3D10CreateDeviceAndSwapChain(
+                adapter,
+                D3D10_DRIVER_TYPE_HARDWARE,
+                null(),
+                0,
+                D3D10_SDK_VERSION,
+                &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC,
+                swap_chain,
+                device,
+            )
+            .unwrap();
+
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
+
+            Ok(method_table)
+        },
+        RenderType::D3D11 => unsafe {
+            let feature_levels = vec![D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0];
+            let refresh_rate = DXGI_RATIONAL {
+                Numerator: 60,
+                Denominator: 1,
+            };
+            let buffer_desc = DXGI_MODE_DESC {
+                Width: 100,
+                Height: 100,
+                RefreshRate: refresh_rate,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                ScanlineOrdering: DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
+            };
+            let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
+            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+                BufferDesc: buffer_desc,
+                SampleDesc: sample_desc,
+                BufferUsage: 32,
+                BufferCount: 1,
+                OutputWindow: window,
+                Windowed: true.into(),
+                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
+            };
+            let swap_chain = null_mut();
+            let device = null_mut();
+            let context = null_mut();
+
+            D3D11CreateDeviceAndSwapChain(
+                null_mut(),
+                D3D_DRIVER_TYPE_HARDWARE,
+                null_mut(),
+                D3D11_CREATE_DEVICE_FLAG(0),
+                feature_levels.as_ptr(),
+                2,
+                D3D11_SDK_VERSION,
+                swap_chain_desc as *const DXGI_SWAP_CHAIN_DESC,
+                swap_chain,
+                device,
+                feature_level,
+                context,
+            )
+            .unwrap();
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
+        },
+        RenderType::D3D12 => unsafe {
+            let feature_level = D3D_FEATURE_LEVEL_11_0;
+            let factory = CreateDXGIFactory::<IDXGIFactory>();
+            let adapter = factory.unwrap().EnumAdapters();
+            let device = D3D12CreateDevice::<ID3D12Device>(adapter, D3D_FEATURE_LEVEL_11_0);
+            let queue_desc = D3D12_COMMAND_QUEUE_DESC {
+                Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
+                Priority: 0,
+                Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
+                NodeMask: 0,
+            };
+            let command_queue = device.unwrap().CreateCommandQueue::<ID3D12CommandQueue>(&queue_desc).unwrap();
+            let command_allocator = device
+                .unwrap()
+                .CreateCommandAllocator::<ID3D12CommandAllocator>(D3D12_COMMAND_LIST_TYPE_DIRECT)
+                .unwrap();
+            let command_list = device
+                .unwrap()
+                .CreateCommandList::<ID3D12GraphicsCommandList>(
+                    0,
+                    D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    command_allocator,
+                    null_mut(),
+                )
+                .unwrap();
+            let refresh_rate = DXGI_RATIONAL {
+                Numerator: 60,
+                Denominator: 1,
+            };
+            let buffer_desc = DXGI_MODE_DESC {
+                Width: 100,
+                Height: 100,
+                RefreshRate: refresh_rate,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                ScanlineOrdering: DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
+            };
+            let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
+            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+                BufferDesc: buffer_desc,
+                SampleDesc: sample_desc,
+                BufferUsage: 32,
+                BufferCount: 2,
+                OutputWindow: window,
+                Windowed: true.into(),
+                SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
+            };
+            let device = null_mut();
+            let swap_chain = factory
+                .unwrap()
+                .CreateSwapChain(command_queue, &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC)
+                .unwrap();
+            D3D12CreateDevice(
+                null_mut(),
+                feature_level,
+                device
+            );
+            // size is the size of the elements, not the bytes this is similar to calloc in
+            // c++
+            let method_table = unsafe {
+                std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS)
+            }
+            .to_vec();
+            if method_table.is_empty() {
+                Err(Error::DummyDevice)
+            }
+        },
+        _ => unreachable!(),
+    };
+
+    destroy_class(&window_class, &window);
+
+    method_table
 }
 
 fn get_d3d9_method_table(window: HWND) -> Result<MethodTable> {
