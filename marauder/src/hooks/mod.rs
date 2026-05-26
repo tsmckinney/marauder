@@ -90,6 +90,7 @@ impl GraphicsHook {
                 hooks::d3d::get_method_table(render_type)?
             },
         };
+        self.method_table = method_table;
 
         Ok(Self {
             method_table,
