@@ -1,11 +1,10 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{AttributeArgs, ItemFn};
+use syn::{ItemFn};
 
 #[proc_macro_attribute]
 pub fn dll_main(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut input = syn::parse_macro_input!(input as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
 
     if input.sig.ident != "main" {
         return syn::Error::new_spanned(&input.sig.ident, "dll_main must be named main")
@@ -21,16 +20,16 @@ pub fn dll_main(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let is_async = input.sig.asyncness.take().is_some();
 
-    create_main(input, args, is_async).unwrap_or_else(|e| e.to_compile_error().into())
+    unsafe { create_main(input, args, is_async).unwrap_or_else(|e| e.to_compile_error().into())}
 }
 
-fn create_main(mut input: ItemFn, _: AttributeArgs, is_async: bool) -> Result<TokenStream, syn::Error> {
+unsafe fn create_main(mut input: ItemFn, args: TokenStream, is_async: bool) -> Result<TokenStream, syn::Error> {
     let original_body = &input.block;
     let brace_token = input.block.brace_token;
     if !is_async {
         input.block = syn::parse2(quote! {
             {
-                marauder::windows::wrappers::disable_thread_library_calls(module_handle).unwrap();
+                marauder::windows::wrappers::disable_thread_library_calls(instance_handle).unwrap();
 
                 match dw_reason {
                     1u32 => {
@@ -50,7 +49,7 @@ fn create_main(mut input: ItemFn, _: AttributeArgs, is_async: bool) -> Result<To
     } else {
         input.block = syn::parse2(quote! {
             {
-                marauder::windows::wrappers::disable_thread_library_calls(module_handle).unwrap();
+                marauder::windows::wrappers::disable_thread_library_calls(instance_handle).unwrap();
 
                 match dw_reason {
                     1u32 => {
@@ -76,7 +75,7 @@ fn create_main(mut input: ItemFn, _: AttributeArgs, is_async: bool) -> Result<To
     // TODO: We probably want to make the type of the params of this function from
     //  our marauder library's types
     input.sig =
-        syn::parse2(quote! {extern "system" fn DllMain(module_handle: marauder::windows::wrappers::HandleInstance, dw_reason: std::os::raw::c_ulong, lp_reserved: *mut std::ffi::c_void) -> bool})
+        syn::parse2(quote! {extern "system" fn DllMain(instance_handle: marauder::windows::wrappers::HandleInstance, dw_reason: std::os::raw::c_ulong, lp_reserved: *mut std::ffi::c_void) -> bool})
             .unwrap();
 
     // If we really cared I think we could just append a Attribute to input.attr for

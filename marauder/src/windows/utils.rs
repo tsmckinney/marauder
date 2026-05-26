@@ -1,7 +1,6 @@
 use std::{ffi::CStr, mem::size_of};
 
 use windows::Win32::{
-    Foundation::CHAR,
     System::Diagnostics::ToolHelp::{TH32CS_SNAPMODULE, TH32CS_SNAPPROCESS},
 };
 
@@ -16,7 +15,7 @@ use crate::{
 /// This will convert a pointer to a string into a string.
 /// # Errors
 /// `std::ffi::Error` if an error occurs.
-pub fn convert_windows_string<'a, const N: usize>(string: [CHAR; N]) -> Result<&'a str, Error> {
+pub fn convert_windows_string<'a, const N: usize>(string: [i8; N]) -> Result<&'a str, Error> {
     unsafe { Ok(CStr::from_ptr(string.as_ptr().cast::<i8>()).to_str()?) }
 }
 
