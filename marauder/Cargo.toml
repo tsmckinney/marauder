@@ -25,6 +25,10 @@ features = [
     "Win32_System_Memory",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Console",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D_Dxc",
+    "Win32_Graphics_Direct3D_Fxc",
     "Win32_Graphics_Direct3D9",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",
@@ -49,6 +53,7 @@ full = ["external", "internal", "injector", "macros"]
 external = []
 internal = []
 injector = []
+d2d = []
 d3d9 = []
 d3d10 = []
 d3d11 = []
