@@ -4,16 +4,17 @@ use std::{
 };
 
 use windows::Win32::{
-    Foundation::HWND,
+    Foundation::{HMODULE, HWND},
     Graphics::{
         Direct3D9::{
-            D3D_SDK_VERSION, D3DCREATE_SOFTWARE_VERTEXPROCESSING, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE,
-            D3DPRESENT_PARAMETERS, D3DSWAPEFFECT_DISCARD, Direct3DCreate9, IDirect3D9, IDirect3DDevice9,
+            D3D_SDK_VERSION, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE,
+            D3DPRESENT_PARAMETERS, D3DSWAPEFFECT_DISCARD, Direct3DCreate9, IDirect3DDevice9,
         },
-        Direct3D10::{D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION, D3D10CreateDeviceAndSwapChain},
+        Direct3D10::{ID3D10Device, D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION, D3D10CreateDeviceAndSwapChain},
         Direct3D11::{
             D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0,
-            D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION, D3D11CreateDeviceAndSwapChain,
+            D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION, D3D11CreateDeviceAndSwapChain, ID3D11Device,
+            ID3D11DeviceContext,
         },
         Direct3D12::{
             D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE, D3D12CreateDevice,
@@ -23,7 +24,7 @@ use windows::Win32::{
             CreateDXGIFactory, DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC, DXGI_MODE_SCALING,
             DXGI_MODE_SCALING_UNSPECIFIED, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
             DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, DXGI_SWAP_EFFECT_DISCARD,
-            DXGI_SWAP_EFFECT_FLIP_DISCARD, IDXGIAdapter, IDXGIFactory,
+            DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE, IDXGIAdapter, IDXGIFactory, IDXGISwapChain,
         },
     },
     UI::WindowsAndMessaging::{
@@ -31,6 +32,7 @@ use windows::Win32::{
         WS_OVERLAPPEDWINDOW,
     },
 };
+use windows_strings::PCWSTR;
 
 use crate::{
     error::{Error, Result},
@@ -50,7 +52,7 @@ const D3D11_VTABLE_ELEMENTS: usize = 205;
 #[cfg(feature = "d3d12")]
 const D3D12_VTABLE_ELEMENTS: usize = 150;
 
-pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
+pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>> {
     let window_class = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
         style: CS_HREDRAW | CS_VREDRAW,
@@ -62,7 +64,7 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
         hCursor: Default::default(),
         hbrBackground: Default::default(),
         lpszMenuName: Default::default(),
-        lpszClassName: "marauder".into(),
+        lpszClassName: PCWSTR("marauder".as_ptr() as *const u16),
         hIconSm: Default::default(),
     };
 
@@ -70,38 +72,43 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
         CreateWindowExW(
             WS_EX_APPWINDOW,
             window_class.lpszClassName,
-            "",
+            PCWSTR("".as_ptr() as *const u16),
             WS_OVERLAPPEDWINDOW,
             0,
             0,
             100,
             100,
-            null_mut(),
-            null_mut(),
-            window_class.hInstance,
-            null_mut(),
+            None,
+            None,
+            Some(window_class.hInstance),
+            None,
         )
     };
 
-    let method_table = match render_type {
+    let method_table: Result<Vec<Vec<*const usize>>> = match render_type {
         RenderType::D3D9 => {
             let direct3d9 = unsafe { Direct3DCreate9(D3D_SDK_VERSION).unwrap() };
-            let params = D3DPRESENT_PARAMETERS {
-                BackBufferWidth: 0,
-                BackBufferHeight: 0,
-                BackBufferFormat: D3DFMT_UNKNOWN,
-                BackBufferCount: 0,
-                MultiSampleType: D3DMULTISAMPLE_NONE,
-                MultiSampleQuality: 0,
-                SwapEffect: D3DSWAPEFFECT_DISCARD,
-                hDeviceWindow: window,
-                Windowed: true.into(),
-                EnableAutoDepthStencil: false.into(),
-                AutoDepthStencilFormat: D3DFMT_UNKNOWN,
-                Flags: 0,
-                FullScreen_RefreshRateInHz: 0,
-                PresentationInterval: 0,
-            };
+            let params: D3DPRESENT_PARAMETERS;
+            if let Ok(wnd) = window {
+                params = D3DPRESENT_PARAMETERS {
+                    BackBufferWidth: 0,
+                    BackBufferHeight: 0,
+                    BackBufferFormat: D3DFMT_UNKNOWN,
+                    BackBufferCount: 0,
+                    MultiSampleType: D3DMULTISAMPLE_NONE,
+                    MultiSampleQuality: 0,
+                    SwapEffect: D3DSWAPEFFECT_DISCARD,
+                    hDeviceWindow: wnd,
+                    Windowed: true.into(),
+                    EnableAutoDepthStencil: false.into(),
+                    AutoDepthStencilFormat: D3DFMT_UNKNOWN,
+                    Flags: 0,
+                    FullScreen_RefreshRateInHz: 0,
+                    PresentationInterval: 0,
+                };
+            } else {
+                return Err(Error::DummyDevice)
+            }
             let device_interface: *mut IDirect3DDevice9 = std::ptr::null_mut();
             let dummy_device = unsafe {
                 direct3d9.CreateDevice(
@@ -115,17 +122,16 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
             };
 
             if dummy_device.is_err() {
-                Err(Error::DummyDevice)
+                return Err(Error::DummyDevice)
             }
 
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
             let method_table = unsafe {
                 std::slice::from_raw_parts((device_interface as *const *const MethodTable).read(), D3D9_VTABLE_ELEMENTS)
-            }
-            .to_vec();
+            }.to_owned();
             if method_table.is_empty() {
-                Err(Error::DummyDevice)
+                return Err(Error::DummyDevice)
             }
 
             Ok(method_table)
@@ -135,8 +141,8 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
             if factory.is_err() {
                 return Err(Error::DummyDevice);
             }
-            let adapter: *const IDXGIAdapter = null();
-            factory.unwrap().EnumAdapters(&adapter as u32);
+            let adapter: IDXGIAdapter;
+            factory.unwrap().EnumAdapters(&raw mut adapter as u32);
             let refresh_rate = DXGI_RATIONAL {
                 Numerator: 60,
                 Denominator: 1,
@@ -151,27 +157,30 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
             };
             let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
-            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
-                BufferDesc: buffer,
-                SampleDesc: sample,
-                BufferUsage: 32,
-                BufferCount: 1,
-                OutputWindow: window,
-                Windowed: true.into(),
-                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
-            };
+            let swap_chain_desc: DXGI_SWAP_CHAIN_DESC;
+            if let Ok(wnd) = window {
+                swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+                    BufferDesc: buffer_desc,
+                    SampleDesc: sample_desc,
+                    BufferUsage: DXGI_USAGE(32),
+                    BufferCount: 1,
+                    OutputWindow: wnd,
+                    Windowed: true.into(),
+                    SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                    Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
+                };
+            }
 
-            let swap_chain = null_mut();
-            let device = null_mut();
+            let swap_chain: Option<*mut Option<IDXGISwapChain>>;
+            let device: Option<*mut Option<ID3D10Device>>;
 
             D3D10CreateDeviceAndSwapChain(
-                adapter,
+                &adapter,
                 D3D10_DRIVER_TYPE_HARDWARE,
-                null(),
+                HMODULE(window_class.hInstance.0),
                 0,
                 D3D10_SDK_VERSION,
-                &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC,
+                Some(&swap_chain_desc as *const DXGI_SWAP_CHAIN_DESC),
                 swap_chain,
                 device,
             )
@@ -180,15 +189,21 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
             let method_table =
-                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS) }
+                unsafe { std::slice::from_raw_parts((device.unwrap() as *const *const MethodTable).read(), D3D10_VTABLE_ELEMENTS) }
                     .to_vec();
             if method_table.is_empty() {
-                Err(Error::DummyDevice)
+                return Err(Error::DummyDevice)
             }
 
             Ok(method_table)
         },
         RenderType::D3D11 => unsafe {
+            let factory = CreateDXGIFactory::<IDXGIFactory>();
+            if factory.is_err() {
+                return Err(Error::DummyDevice);
+            }
+            let adapter: IDXGIAdapter;
+            factory.unwrap().EnumAdapters(&raw mut adapter as u32);
             let feature_levels = vec![D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0];
             let refresh_rate = DXGI_RATIONAL {
                 Numerator: 60,
@@ -203,49 +218,54 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
             };
             let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
-            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
-                BufferDesc: buffer_desc,
-                SampleDesc: sample_desc,
-                BufferUsage: 32,
-                BufferCount: 1,
-                OutputWindow: window,
-                Windowed: true.into(),
-                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
-            };
-            let swap_chain = null_mut();
-            let device = null_mut();
-            let context = null_mut();
+            let swap_chain_desc: DXGI_SWAP_CHAIN_DESC;
+            if let Ok(wnd) = window {
+                swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+                    BufferDesc: buffer_desc,
+                    SampleDesc: sample_desc,
+                    BufferUsage: 32,
+                    BufferCount: 1,
+                    OutputWindow: wnd,
+                    Windowed: true.into(),
+                    SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                    Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
+                };
+            }
+            let swap_chain: Option<*mut Option<IDXGISwapChain>>;
+            let device: Option<*mut Option<ID3D11Device>>;
+            let context: Option<*mut Option<ID3D11DeviceContext>>;
 
             D3D11CreateDeviceAndSwapChain(
-                null_mut(),
+                &adapter,
                 D3D_DRIVER_TYPE_HARDWARE,
                 null_mut(),
                 D3D11_CREATE_DEVICE_FLAG(0),
-                feature_levels.as_ptr(),
-                2,
+                Some(feature_levels.as_slice()),
                 D3D11_SDK_VERSION,
-                swap_chain_desc as *const DXGI_SWAP_CHAIN_DESC,
+                Some(&swap_chain_desc as *const DXGI_SWAP_CHAIN_DESC),
                 swap_chain,
                 device,
-                feature_level,
+                Some(feature_levels.first().as_mut()),
                 context,
             )
             .unwrap();
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
             let method_table =
-                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
+                unsafe { std::slice::from_raw_parts((device.unwrap() as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
                     .to_vec();
             if method_table.is_empty() {
-                Err(Error::DummyDevice)
+                return Err(Error::DummyDevice)
             }
+            Ok(method_table)
         },
         RenderType::D3D12 => unsafe {
             let feature_level = D3D_FEATURE_LEVEL_11_0;
             let factory = CreateDXGIFactory::<IDXGIFactory>();
-            let adapter = factory.unwrap().EnumAdapters();
-            let device = D3D12CreateDevice::<ID3D12Device>(adapter, D3D_FEATURE_LEVEL_11_0);
+            let adapter: *const IDXGIAdapter = null();
+            factory.unwrap().EnumAdapters(&raw mut adapter as u32);
+            let device: *mut ID3D12Device;
+            let _ = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, Some(device));
             let queue_desc = D3D12_COMMAND_QUEUE_DESC {
                 Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
                 Priority: 0,
@@ -279,7 +299,7 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 Scaling: DXGI_MODE_SCALING_UNSPECIFIED,
             };
             let sample_desc = DXGI_SAMPLE_DESC { Count: 1, Quality: 0 };
-            let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
+            let swap_chain_desc: DXGI_SWAP_CHAIN_DESC = DXGI_SWAP_CHAIN_DESC {
                 BufferDesc: buffer_desc,
                 SampleDesc: sample_desc,
                 BufferUsage: 32,
@@ -301,8 +321,9 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<MethodTable>> {
                 unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
                     .to_vec();
             if method_table.is_empty() {
-                Err(Error::DummyDevice)
+                return Err(Error::DummyDevice)
             }
+            Ok(method_table)
         },
         _ => unreachable!(),
     };
