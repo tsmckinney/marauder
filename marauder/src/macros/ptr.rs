@@ -45,7 +45,7 @@ macro_rules! make_fn {
 ///
 /// # Safety:
 /// This function is extremely unsafe due to the use of
-/// `std::marauder::transmute`. Make sure you know what you are doing so you don't
+/// `std::mem::transmute`. Make sure you know what you are doing so you don't
 /// get a access violation which will crash your process.
 ///
 /// # Example:

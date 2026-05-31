@@ -75,7 +75,7 @@ unsafe fn create_main(mut input: ItemFn, _args: TokenStream, is_async: bool) -> 
     // TODO: We probably want to make the type of the params of this function from
     //  our marauder library's types
     input.sig =
-        syn::parse2(quote! {extern "system" fn DllMain(instance_handle: marauder::windows::wrappers::HandleInstance, dw_reason: std::os::raw::c_ulong, lp_reserved: *mut std::ffi::c_void) -> bool})
+        syn::parse2(quote! {extern "system" fn DllMain(module_handle: marauder::windows::wrappers::HandleModule, dw_reason: std::os::raw::c_ulong, lp_reserved: *mut std::ffi::c_void) -> bool})
             .unwrap();
 
     // If we really cared I think we could just append a Attribute to input.attr for

@@ -1,4 +1,5 @@
-//! This is a DLL using our macros ONLY and not our full library when you don't care about anything
+//! This is a DLL using our macros ONLY and not our full library.
+//! This can come in handy when you don't care about anything
 //! but the DLL generation.
 
 #[marauder_macros::dll_main]

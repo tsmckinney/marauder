@@ -1,9 +1,10 @@
-//! This is a sample of a DLL using the tokio runtime
+//! This is a sample DLL using the tokio runtime.
 
-// By default putting dll_main as async will use the tokio runtime, I have no
-// plans atm of supporting any others as its very simple to build a runtime
+// By default, setting the main function as asynchronous will use the tokio
+// runtime. Neither I nor the original author have any plans at the moment
+// regarding support for any others, as I prefer to prioritize community
+// efforts to add more runtimes.
 #[marauder::dll_main]
-#[tokio::main]
 async fn main() {
-    println!("Hi from tokio, instance_handle: {:?}", instance_handle);
+    println!("Hi from tokio, module_handle: {:?}", module_handle);
 }

@@ -1,13 +1,16 @@
 # marauder
-marauder is a windows (maybe eventually other OS) game hacking (kinda?) library, it's main goal is to make it easy to
+marauder is a Windows (maybe eventually other OS) game hacking (kinda?) library. Its main goal is to make it easy to
 create DLLs and inject them into processes. It also provides some utilities for reading/writing memory and currently
-plans to support belong D3D hooks of all kinds.
+plans to support belong graphics hooks of all kinds.
 
 ## Checklists
 - [✅] DLL creation
 - [✅] Simple Injection
 - [✅] Utility functions for reading/writing memory
-- [⏳] D3D hooks
+- [⏳] Graphics hooks
+    - [⏳] D3D
+    - [⏳] OpenGL
+    - [⏳] Vulkan
 
 ## Install
 ```toml
@@ -20,8 +23,8 @@ marauder-macros = "0.1.0"
 ```
 
 ## Examples
-Below will be a bunch of examples, if you want more indepth examples typically with comments you can check out the 
-examples directory
+Below are a bunch of examples. If you want more in-depth examples (typically with comments), you can check out the 
+examples directory.
 
 ## Easy DLL creation with minimal boilerplate
 ```rust
@@ -30,7 +33,7 @@ fn main() {
     // This is a fully functional DLL ready for injection!
     println!("I am a DLL inside the process, my module handle is: {}!", module_handle);
 }
-// We also support async! By default making your dll_main async you will be running on the tokio runtime
+// We also support async! By default, making your dll_main async means you will be running on the tokio runtime
 #[marauder::dll_main]
 async fn main() {
     
@@ -45,7 +48,7 @@ fn main() {
     if !path.exists() {
         panic!("The DLL doesn't exist at {}", dll_path);
     }
-    // By default the config will use a LoadLibrary injection with no stealth
+    // By default, the config will use a LoadLibrary injection with no stealth.
     let config = Config::default();
     let injector = Injector::new(config);
     

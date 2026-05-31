@@ -1,10 +1,10 @@
 //! This example is a very basic DLL that will be injected into the process and
-//! print to stdout
+//! print "Hi from the sample DLL" to its console output.
 
 use marauder::windows::wrappers::{DWORD, HandleInstance, LPVOID};
 
 fn hack_thread() {
-    println!("Hi from the sample dll");
+    println!("Hi from the sample DLL");
 }
 
 #[unsafe(no_mangle)]

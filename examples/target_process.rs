@@ -1,5 +1,6 @@
 //! This is just a very dumb process that does nothing besides run and wait to
 //! be injected into
+//! TODO: Delete this? It doesn't actually use any code pertaining to marauder...
 
 fn main() {
     println!(
