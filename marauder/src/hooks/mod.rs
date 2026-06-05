@@ -22,7 +22,7 @@ pub enum RenderType {
     D3D12,
 }
 
-pub type MethodTable = Vec<*const usize>;
+pub type MethodTable = Vec<Vec<*const usize>>;
 
 pub struct GraphicsHook {
     method_table: MethodTable,
@@ -30,7 +30,7 @@ pub struct GraphicsHook {
 
 impl GraphicsHook {
     /// Acquires the method table by creating a dummy device
-    pub fn new(render_type: RenderType) -> Result<Self> {
+    pub fn new(&mut self, render_type: RenderType) -> Result<Self> {
         let method_table: MethodTable = match render_type {
             RenderType::OPENGL => {
                 #[cfg(not(feature = "opengl"))]

@@ -6,23 +6,28 @@ use std::{
 use windows::Win32::{
     Foundation::{HMODULE, HWND},
     Graphics::{
+        Direct3D::{
+            D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0
+        },
         Direct3D9::{
             D3D_SDK_VERSION, D3DDEVTYPE_HAL, D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE,
             D3DPRESENT_PARAMETERS, D3DSWAPEFFECT_DISCARD, Direct3DCreate9, IDirect3DDevice9,
         },
-        Direct3D10::{ID3D10Device, D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION, D3D10CreateDeviceAndSwapChain},
+        Direct3D10::{D3D10_DRIVER_TYPE_HARDWARE, D3D10_SDK_VERSION, D3D10CreateDeviceAndSwapChain, ID3D10Device},
         Direct3D11::{
-            D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0,
             D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION, D3D11CreateDeviceAndSwapChain, ID3D11Device,
             ID3D11DeviceContext,
         },
         Direct3D12::{
             D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE, D3D12CreateDevice,
-            ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Device, ID3D12GraphicsCommandList,
+            ID3D12CommandAllocator, ID3D12CommandQueue, ID3D12Device, ID3D12GraphicsCommandList, ID3D12PipelineState,
+            D3D12_COMPUTE_PIPELINE_STATE_DESC,
         },
         Dxgi::{
-            CreateDXGIFactory, DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC, DXGI_MODE_SCALING,
-            DXGI_MODE_SCALING_UNSPECIFIED, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
+            Common::{
+                DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_MODE_DESC, DXGI_MODE_SCALING_UNSPECIFIED, DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, DXGI_RATIONAL, DXGI_SAMPLE_DESC
+            },
+            CreateDXGIFactory,
             DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, DXGI_SWAP_EFFECT_DISCARD,
             DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE, IDXGIAdapter, IDXGIFactory, IDXGISwapChain,
         },
@@ -52,7 +57,7 @@ const D3D11_VTABLE_ELEMENTS: usize = 205;
 #[cfg(feature = "d3d12")]
 const D3D12_VTABLE_ELEMENTS: usize = 150;
 
-pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>> {
+pub fn get_method_table(render_type: RenderType) -> Result<MethodTable> {
     let window_class = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
         style: CS_HREDRAW | CS_VREDRAW,
@@ -129,7 +134,7 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
             // c++
             let method_table = unsafe {
                 std::slice::from_raw_parts((device_interface as *const *const MethodTable).read(), D3D9_VTABLE_ELEMENTS)
-            }.to_owned();
+            };
             if method_table.is_empty() {
                 return Err(Error::DummyDevice)
             }
@@ -223,7 +228,7 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
                 swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
                     BufferDesc: buffer_desc,
                     SampleDesc: sample_desc,
-                    BufferUsage: 32,
+                    BufferUsage: DXGI_USAGE(32),
                     BufferCount: 1,
                     OutputWindow: wnd,
                     Windowed: true.into(),
@@ -235,17 +240,19 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
             let device: Option<*mut Option<ID3D11Device>>;
             let context: Option<*mut Option<ID3D11DeviceContext>>;
 
+            let level: *mut D3D_FEATURE_LEVEL = feature_levels.first_mut().unwrap();
+
             D3D11CreateDeviceAndSwapChain(
                 &adapter,
                 D3D_DRIVER_TYPE_HARDWARE,
-                null_mut(),
+                HMODULE(null_mut()),
                 D3D11_CREATE_DEVICE_FLAG(0),
                 Some(feature_levels.as_slice()),
                 D3D11_SDK_VERSION,
                 Some(&swap_chain_desc as *const DXGI_SWAP_CHAIN_DESC),
                 swap_chain,
                 device,
-                Some(feature_levels.first().as_mut()),
+                Some(level),
                 context,
             )
             .unwrap();
@@ -262,28 +269,28 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
         RenderType::D3D12 => unsafe {
             let feature_level = D3D_FEATURE_LEVEL_11_0;
             let factory = CreateDXGIFactory::<IDXGIFactory>();
-            let adapter: *const IDXGIAdapter = null();
-            factory.unwrap().EnumAdapters(&raw mut adapter as u32);
-            let device: *mut ID3D12Device;
-            let _ = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, Some(device));
+            let adapter_num: u32;
+            let adapter: IDXGIAdapter = factory.unwrap().EnumAdapters(adapter_num).map_or_else(|_| {
+                return Err(Error::DummyDevice);
+            }, Ok).unwrap();
+            let mut device: ID3D12Device;
             let queue_desc = D3D12_COMMAND_QUEUE_DESC {
                 Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
                 Priority: 0,
                 Flags: D3D12_COMMAND_QUEUE_FLAG_NONE,
                 NodeMask: 0,
             };
-            let command_queue = device.unwrap().CreateCommandQueue::<ID3D12CommandQueue>(&queue_desc).unwrap();
+            let command_queue = device.CreateCommandQueue::<ID3D12CommandQueue>(&queue_desc).unwrap();
             let command_allocator = device
-                .unwrap()
                 .CreateCommandAllocator::<ID3D12CommandAllocator>(D3D12_COMMAND_LIST_TYPE_DIRECT)
                 .unwrap();
+            let pipeline_state = device.CreateComputePipelineState::<ID3D12PipelineState>(&(D3D12_COMPUTE_PIPELINE_STATE_DESC::default()));
             let command_list = device
-                .unwrap()
-                .CreateCommandList::<ID3D12GraphicsCommandList>(
+                .CreateCommandList(
                     0,
                     D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    command_allocator,
-                    null_mut(),
+                    &command_allocator,
+                    &pipeline_state.unwrap(),
                 )
                 .unwrap();
             let refresh_rate = DXGI_RATIONAL {
@@ -302,23 +309,23 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
             let swap_chain_desc: DXGI_SWAP_CHAIN_DESC = DXGI_SWAP_CHAIN_DESC {
                 BufferDesc: buffer_desc,
                 SampleDesc: sample_desc,
-                BufferUsage: 32,
+                BufferUsage: DXGI_USAGE(32),
                 BufferCount: 2,
-                OutputWindow: window,
+                OutputWindow: window.unwrap(),
                 Windowed: true.into(),
                 SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
                 Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
             };
-            let device = null_mut();
-            let swap_chain = factory
+            let swap_chain: IDXGISwapChain;
+            factory
                 .unwrap()
-                .CreateSwapChain(command_queue, &swap_chain_desc as *mut DXGI_SWAP_CHAIN_DESC)
+                .CreateSwapChain(&command_queue, &swap_chain_desc, &mut Some(swap_chain))
                 .unwrap();
-            D3D12CreateDevice(null_mut(), feature_level, device);
+            let _ = D3D12CreateDevice(&adapter, feature_level, &mut Some(device));
             // size is the size of the elements, not the bytes this is similar to calloc in
             // c++
             let method_table =
-                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D11_VTABLE_ELEMENTS) }
+                unsafe { std::slice::from_raw_parts((device as *const *const MethodTable).read(), D3D12_VTABLE_ELEMENTS) }
                     .to_vec();
             if method_table.is_empty() {
                 return Err(Error::DummyDevice)
@@ -328,7 +335,7 @@ pub fn get_method_table(render_type: RenderType) -> Result<Vec<Vec<MethodTable>>
         _ => unreachable!(),
     };
 
-    destroy_class(&window_class, &window);
+    destroy_class(&window_class, &window.unwrap());
 
     method_table
 }
