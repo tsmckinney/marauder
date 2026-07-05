@@ -4,31 +4,34 @@
 //! Not all functions are designated as safe as without adding a significant
 //! amount of boilerplate will always be up to the caller to make sure UB can't
 //! happen. As time goes on we'll try to make as little functions unsafe.
-use std::{os::raw::c_void, ptr::null_mut};
+use std::{ffi::CString, os::raw::c_void};
 
-use windows::Win32::{
-    Foundation::{CloseHandle, GetLastError, HANDLE, HINSTANCE},
-    Security::SECURITY_ATTRIBUTES,
-    System::{
-        Console::{AllocConsole, FreeConsole},
-        Diagnostics::{
-            Debug::{ReadProcessMemory, WriteProcessMemory},
-            ToolHelp::{
-                CreateToolhelp32Snapshot, Module32First, Module32Next, Process32First, Process32Next,
-                CREATE_TOOLHELP_SNAPSHOT_FLAGS, MODULEENTRY32, PROCESSENTRY32,
+use windows::{
+    core::PCSTR,
+    Win32::{
+        Foundation::{CloseHandle, GetLastError, HANDLE, HINSTANCE, HMODULE, WAIT_FAILED},
+        Security::SECURITY_ATTRIBUTES,
+        System::{
+            Console::{AllocConsole, FreeConsole},
+            Diagnostics::{
+                Debug::{ReadProcessMemory, WriteProcessMemory},
+                ToolHelp::{
+                    CreateToolhelp32Snapshot, Module32First, Module32Next, Process32First, Process32Next,
+                    CREATE_TOOLHELP_SNAPSHOT_FLAGS, MODULEENTRY32, PROCESSENTRY32,
+                },
+            },
+            LibraryLoader::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleA, GetProcAddress},
+            Memory::{
+                VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx, MEMORY_BASIC_INFORMATION,
+                PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
+            },
+            Threading::{
+                CreateRemoteThread, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, WaitForSingleObject,
+                LPTHREAD_START_ROUTINE, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS,
             },
         },
-        LibraryLoader::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleA, GetProcAddress},
-        Memory::{
-            VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx, MEMORY_BASIC_INFORMATION,
-            PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
-        },
-        Threading::{
-            CreateRemoteThread, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, WaitForSingleObject,
-            LPTHREAD_START_ROUTINE, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS,
-        },
+        UI::Input::KeyboardAndMouse::GetAsyncKeyState,
     },
-    UI::Input::KeyboardAndMouse::GetAsyncKeyState,
 };
 
 use crate::error::Error;
@@ -101,18 +104,19 @@ pub type CreateToolhelpSnapshotFlags = CREATE_TOOLHELP_SNAPSHOT_FLAGS;
 /// will make `module32_first` fail.
 pub type ModuleEntry32 = MODULEENTRY32;
 
+fn last_error() -> u32 { unsafe { GetLastError().0 } }
+
+fn pcstr(string: &str) -> Result<CString, Error> { Ok(CString::new(string)?) }
+
 /// `get_module_handle` will get the handle of a module.
 ///
 /// # Errors
 /// If the `hInstance` returned is NULL a `Error::Handle` is returned.
 pub fn get_module_handle(module_name: &str) -> Result<HandleInstance, Error> {
-    let hinstance = unsafe { GetModuleHandleA(module_name) };
-
-    if hinstance.is_negative() {
-        Err(Error::Handle(unsafe { GetLastError() }))
-    } else {
-        Ok(hinstance)
-    }
+    let module_name = pcstr(module_name)?;
+    unsafe { GetModuleHandleA(PCSTR(module_name.as_ptr().cast())) }
+        .map(Into::into)
+        .map_err(|_| Error::Handle(last_error()))
 }
 
 /// Retrieves information about a range of pages within the virtual address
@@ -126,9 +130,9 @@ pub fn virtual_query_ex(
     buffer: *mut MemoryBasicInformation,
     length: usize,
 ) -> Result<usize, Error> {
-    let num_bytes = unsafe { VirtualQueryEx(process, address, buffer, length) };
+    let num_bytes = unsafe { VirtualQueryEx(process, Some(address), buffer, length) };
     if num_bytes == 0 {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
+        Err(Error::MemoryError(last_error()))
     } else {
         Ok(num_bytes)
     }
@@ -162,11 +166,7 @@ pub fn virtual_protect_ex(
 ) -> Result<(), Error> {
     let res = unsafe { VirtualProtectEx(process, address, size, new_protect, old_protect) };
 
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::Allocation(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::Allocation(last_error()))
 }
 
 /// Changes the protection on a region of committed pages in the virtual address
@@ -182,11 +182,7 @@ pub fn virtual_protect(
 ) -> Result<(), Error> {
     let res = unsafe { VirtualProtect(address, size, new_protect, old_protect) };
 
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Waits until the specified object is in the signaled state or the time-out
@@ -200,10 +196,10 @@ pub fn virtual_protect(
 pub fn wait_for_single_object(handle: Handle, milliseconds: u32) -> Result<u32, Error> {
     let res = unsafe { WaitForSingleObject(handle, milliseconds) };
 
-    if res == 0xFFFF_FFFF {
+    if res == WAIT_FAILED {
         Err(Error::Timeout)
     } else {
-        Ok(res)
+        Ok(res.0)
     }
 }
 
@@ -230,20 +226,16 @@ pub fn create_remote_thread(
     let handle = unsafe {
         CreateRemoteThread(
             process,
-            thread_attributes.unwrap_or(null_mut()),
+            thread_attributes.map(|attributes| attributes.cast_const()),
             stack_size,
             start_address,
-            parameter.unwrap_or(null_mut()),
+            parameter.map(|param| param.cast_const()),
             creation_flags,
-            thread_id.unwrap_or(null_mut()),
+            thread_id,
         )
     };
 
-    if handle.is_invalid() {
-        Err(Error::ProcessError(unsafe { GetLastError() }))
-    } else {
-        Ok(handle)
-    }
+    handle.map_err(|_| Error::ProcessError(last_error()))
 }
 
 /// Creates a thread to execute within the virtual address space of the calling
@@ -267,20 +259,16 @@ pub fn create_thread(
 ) -> Result<Handle, Error> {
     let res = unsafe {
         CreateThread(
-            thread_attributes.unwrap_or(null_mut()),
+            thread_attributes.map(|attributes| attributes.cast_const()),
             stack_size,
             start_address,
-            parameter.unwrap_or(null_mut()),
+            parameter.map(|param| param.cast_const()),
             creation_flags,
-            thread_id.unwrap_or(null_mut()),
+            thread_id,
         )
     };
 
-    if res.is_invalid() {
-        Err(Error::ProcessError(unsafe { GetLastError() }))
-    } else {
-        Ok(res)
-    }
+    res.map_err(|_| Error::ProcessError(last_error()))
 }
 
 /// Closes an open object handle.
@@ -290,11 +278,7 @@ pub fn create_thread(
 pub fn close_handle(handle: Handle) -> Result<(), Error> {
     let res = unsafe { CloseHandle(handle) };
 
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::Handle(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::Handle(last_error()))
 }
 
 /// Retrieves a pseudo handle for the current process.
@@ -309,11 +293,7 @@ pub fn get_current_process() -> Handle { unsafe { GetCurrentProcess() } }
 pub fn alloc_console() -> Result<(), Error> {
     let success = unsafe { AllocConsole() };
 
-    if success.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::ConsoleAllocation(unsafe { GetLastError() }))
-    }
+    success.map_err(|_| Error::ConsoleAllocation(last_error()))
 }
 
 /// Frees a console from the calling process.
@@ -321,11 +301,7 @@ pub fn alloc_console() -> Result<(), Error> {
 pub fn free_console() -> Result<(), Error> {
     let success = unsafe { FreeConsole() };
 
-    if success.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::ConsoleDeallocation(unsafe { GetLastError() }))
-    }
+    success.map_err(|_| Error::ConsoleDeallocation(last_error()))
 }
 
 /// Firstly `FreeLibrary` is called which frees the DLL and if needed decrements
@@ -334,14 +310,15 @@ pub fn free_console() -> Result<(), Error> {
 /// then `ExitThread` will be called to terminate the calling thread.
 pub fn free_library_and_exit_thread(module_handle: HandleInstance, exit_code: DWORD) {
     unsafe {
-        FreeLibraryAndExitThread(module_handle, exit_code);
+        FreeLibraryAndExitThread(module_handle.into(), exit_code);
     }
 }
 
 /// Opens an existing local process object.
-#[must_use]
-pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, process_id: DWORD) -> Handle {
-    unsafe { OpenProcess(desired_access, inherit_handle, process_id) }
+/// # Errors
+/// If the process cannot be opened, `Error::ProcessError` is returned.
+pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, process_id: DWORD) -> Result<Handle, Error> {
+    unsafe { OpenProcess(desired_access, inherit_handle, process_id) }.map_err(|_| Error::ProcessError(last_error()))
 }
 
 /// Takes a snapshot of the specified processes, as well as the heaps, modules,
@@ -351,11 +328,7 @@ pub fn open_process(desired_access: ProcessAccessRights, inherit_handle: bool, p
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn create_tool_help32_snapshot(flags: CreateToolhelpSnapshotFlags, process_id: DWORD) -> Result<Handle, Error> {
     let res = unsafe { CreateToolhelp32Snapshot(flags, process_id) };
-    if res.is_invalid() {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    } else {
-        Ok(res)
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Retrieves information about the first module associated with a process.
@@ -364,11 +337,7 @@ pub fn create_tool_help32_snapshot(flags: CreateToolhelpSnapshotFlags, process_i
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn module32_first(snapshot: Handle, module_entry: &mut ModuleEntry32) -> Result<(), Error> {
     let res = unsafe { Module32First(snapshot, module_entry) };
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Retrieves information about the next module associated with a process or
@@ -378,11 +347,7 @@ pub fn module32_first(snapshot: Handle, module_entry: &mut ModuleEntry32) -> Res
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn module32_next(snapshot: Handle, module_entry: &mut ModuleEntry32) -> Result<(), Error> {
     let res = unsafe { Module32Next(snapshot, module_entry) };
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Retrieves information about the first process encountered in a system
@@ -392,11 +357,7 @@ pub fn module32_next(snapshot: Handle, module_entry: &mut ModuleEntry32) -> Resu
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn process32_first(snapshot: Handle, process_entry: &mut ProcessEntry32) -> Result<(), Error> {
     let res = unsafe { Process32First(snapshot, process_entry) };
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Retrieves information about the next process recorded in a system snapshot.
@@ -405,11 +366,7 @@ pub fn process32_first(snapshot: Handle, process_entry: &mut ProcessEntry32) -> 
 /// If the function fails, `Error::MemoryError` is returned.
 pub fn process32_next(snapshot: Handle, process_entry: &mut ProcessEntry32) -> Result<(), Error> {
     let res = unsafe { Process32Next(snapshot, process_entry) };
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Writes data to an area of memory in a specified process. The entire area to
@@ -424,20 +381,8 @@ pub fn write_process_memory(
     size: size_t,
     number_of_bytes_written: Option<*mut size_t>,
 ) -> Result<(), Error> {
-    let result = unsafe {
-        WriteProcessMemory(
-            process_handle,
-            base_address,
-            buffer,
-            size,
-            number_of_bytes_written.unwrap_or(null_mut()),
-        )
-    };
-    if result.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    let result = unsafe { WriteProcessMemory(process_handle, base_address, buffer, size, number_of_bytes_written) };
+    result.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Reads data from an area of memory in a specified process.
@@ -451,12 +396,8 @@ pub fn read_process_memory(
     size: size_t,
     number_of_bytes_written: *mut size_t,
 ) -> Result<(), Error> {
-    let res = unsafe { ReadProcessMemory(process_handle, base_address, buffer, size, number_of_bytes_written) };
-    if res.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    let res = unsafe { ReadProcessMemory(process_handle, base_address, buffer, size, Some(number_of_bytes_written)) };
+    res.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Retrieves the address of an exported function or variable from the specified
@@ -465,8 +406,9 @@ pub fn read_process_memory(
 /// # Errors
 /// If the function fails, `Error::ProcessAddress` is returned.
 pub fn get_proc_address(hmodule: HINSTANCE, lpprocname: &str) -> Result<usize, Error> {
-    let function_address =
-        unsafe { GetProcAddress(hmodule, lpprocname) }.ok_or_else(|| Error::ProcessAddress(unsafe { GetLastError() }))?;
+    let proc_name = pcstr(lpprocname)?;
+    let function_address = unsafe { GetProcAddress(HMODULE(hmodule.0), PCSTR(proc_name.as_ptr().cast())) }
+        .ok_or_else(|| Error::ProcessAddress(last_error()))?;
 
     Ok(function_address as usize)
 }
@@ -486,10 +428,18 @@ pub fn virtual_alloc_ex(
     allocation_type: VirtualAllocationType,
     protection_flags: PageProtectionFlags,
 ) -> Result<*mut c_void, Error> {
-    let res = unsafe { VirtualAllocEx(handle, address.unwrap_or(null_mut()), size, allocation_type, protection_flags) };
+    let res = unsafe {
+        VirtualAllocEx(
+            handle,
+            address.map(|address| address.cast_const()),
+            size,
+            allocation_type,
+            protection_flags,
+        )
+    };
 
     if res.is_null() {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
+        Err(Error::MemoryError(last_error()))
     } else {
         Ok(res)
     }
@@ -507,11 +457,7 @@ pub fn virtual_free_ex(
     virtual_free_type: VirtualFreeType,
 ) -> Result<(), Error> {
     let result = unsafe { VirtualFreeEx(process_handle, address, size, virtual_free_type) };
-    if result.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::MemoryError(unsafe { GetLastError() }))
-    }
+    result.map_err(|_| Error::MemoryError(last_error()))
 }
 
 /// Disables the `DLL_THREAD_ATTACH` and `DLL_THREAD_DETACH` notifications for
@@ -521,12 +467,8 @@ pub fn virtual_free_ex(
 /// # Errors
 /// If the function fails, `Error::Handle` is returned.
 pub fn disable_thread_library_calls(module_handle: HandleInstance) -> Result<(), Error> {
-    let result = unsafe { DisableThreadLibraryCalls(module_handle) };
-    if result.as_bool() {
-        Ok(())
-    } else {
-        Err(Error::Handle(unsafe { GetLastError() }))
-    }
+    let result = unsafe { DisableThreadLibraryCalls(module_handle.into()) };
+    result.map_err(|_| Error::Handle(last_error()))
 }
 
 /// Will return a PID for the Handle it is given.
@@ -537,7 +479,7 @@ pub fn get_process_id(handle: Handle) -> Result<u32, Error> {
     let result = unsafe { GetProcessId(handle) };
 
     if result == 0 {
-        Err(Error::Handle(unsafe { GetLastError() }))
+        Err(Error::Handle(last_error()))
     } else {
         Ok(result)
     }

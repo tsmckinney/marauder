@@ -92,7 +92,7 @@ impl Injector {
     pub fn inject(&self, process_id: u32, dll_path: &str) -> Result<(), Error> {
         let load_lib_address = get_proc_address(get_module_handle("Kernel32.dll")?, "LoadLibraryA")?;
         let dll_path_size = dll_path.as_bytes().len();
-        let process_handle = open_process(PROCESS_ALL_ACCESS, false, process_id);
+        let process_handle = open_process(PROCESS_ALL_ACCESS, false, process_id)?;
         let path = virtual_alloc_ex(process_handle, None, dll_path_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)?;
 
         match self.config.execution_method {
@@ -105,10 +105,10 @@ impl Injector {
                 };
 
                 close_handle(thread_handle)?;
-            }
+            },
             CodeExecutionMethod::ThreadHijack => {
                 todo!()
-            }
+            },
         }
 
         Ok(())

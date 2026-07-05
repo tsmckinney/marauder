@@ -34,4 +34,10 @@ pub enum Error {
     ConsoleDeallocation(u32),
     #[error("Failed to create a DirectX dummy device")]
     DummyDevice,
+    #[error("Hook index was out of bounds")]
+    HookIndex,
+    #[error("Hook is already installed for this method")]
+    HookAlreadyInstalled,
+    #[error("Hook target is not writable")]
+    HookProtection,
 }
