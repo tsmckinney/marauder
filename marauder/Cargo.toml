@@ -80,3 +80,19 @@ required-features = ["injector"]
 [[example]]
 name = "target_process"
 path = "../examples/target_process.rs"
+
+[[example]]
+name = "process_info"
+path = "../examples/process_info.rs"
+
+[[example]]
+name = "process_scan"
+path = "../examples/process_scan.rs"
+
+[[example]]
+name = "module_scan"
+path = "../examples/module_scan.rs"
+
+[[example]]
+name = "toy_manual_map"
+path = "../examples/toy_manual_map.rs"

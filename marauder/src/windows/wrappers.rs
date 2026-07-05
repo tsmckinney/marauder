@@ -23,11 +23,11 @@ use windows::{
             LibraryLoader::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleA, GetProcAddress},
             Memory::{
                 VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx, MEMORY_BASIC_INFORMATION,
-                PAGE_PROTECTION_FLAGS, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
+                PAGE_PROTECTION_FLAGS, PAGE_TYPE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
             },
             Threading::{
-                CreateRemoteThread, CreateThread, GetCurrentProcess, GetProcessId, OpenProcess, WaitForSingleObject,
-                LPTHREAD_START_ROUTINE, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS,
+                CreateRemoteThread, CreateThread, GetCurrentProcess, GetExitCodeThread, GetProcessId, OpenProcess,
+                WaitForSingleObject, LPTHREAD_START_ROUTINE, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS,
             },
         },
         UI::Input::KeyboardAndMouse::GetAsyncKeyState,
@@ -72,6 +72,8 @@ pub type MemoryBasicInformation = MEMORY_BASIC_INFORMATION;
 /// `PageProtectionFlags` is a variable that contains memory protection
 /// constants.
 pub type PageProtectionFlags = PAGE_PROTECTION_FLAGS;
+/// `PageType` indicates the type of pages in a region.
+pub type PageType = PAGE_TYPE;
 
 // TODO: DOCS cc: steele
 pub type VirtualFreeType = VIRTUAL_FREE_TYPE;
@@ -95,9 +97,10 @@ pub type ProcessAccessRights = PROCESS_ACCESS_RIGHTS;
 /// address space when the snapshot from `create_tool_help32_snapshot` was
 /// taken.
 pub type ProcessEntry32 = PROCESSENTRY32;
-/// `CreateToolhelpSnapshotFlags` are flags to indicate which parts of the
-/// system should be included in the snapshot for example you would use the flag
-/// `TH32CS_SNAPMODULE` to include the modules of the process.
+/// `CreateToolhelpSnapshotFlags` indicate which parts of the system should be
+/// included in the snapshot.
+///
+/// For example, use `TH32CS_SNAPMODULE` to include process modules.
 pub type CreateToolhelpSnapshotFlags = CREATE_TOOLHELP_SNAPSHOT_FLAGS;
 /// `ModuleEntry32` is used for crawling the modules of a process in most cases
 /// you will be just default its value dwSize because not initializing dwSize
@@ -203,6 +206,18 @@ pub fn wait_for_single_object(handle: Handle, milliseconds: u32) -> Result<u32, 
     }
 }
 
+/// Retrieves the termination status of the specified thread.
+///
+/// # Errors
+/// If the function fails, `Error::ProcessError` is returned.
+pub fn get_exit_code_thread(thread: Handle) -> Result<DWORD, Error> {
+    let mut exit_code = 0;
+    let res = unsafe { GetExitCodeThread(thread, &raw mut exit_code) };
+
+    res.map_err(|_| Error::ProcessError(last_error()))?;
+    Ok(exit_code)
+}
+
 /// Creates a thread that runs in the virtual address space of another process.
 ///
 /// Use the `CreateRemoteThreadEx` function to create a thread that runs in the
@@ -226,10 +241,10 @@ pub fn create_remote_thread(
     let handle = unsafe {
         CreateRemoteThread(
             process,
-            thread_attributes.map(|attributes| attributes.cast_const()),
+            thread_attributes.map(<*mut SecurityAttributes>::cast_const),
             stack_size,
             start_address,
-            parameter.map(|param| param.cast_const()),
+            parameter.map(<LPVOID>::cast_const),
             creation_flags,
             thread_id,
         )
@@ -259,10 +274,10 @@ pub fn create_thread(
 ) -> Result<Handle, Error> {
     let res = unsafe {
         CreateThread(
-            thread_attributes.map(|attributes| attributes.cast_const()),
+            thread_attributes.map(<*mut SecurityAttributes>::cast_const),
             stack_size,
             start_address,
-            parameter.map(|param| param.cast_const()),
+            parameter.map(<LPVOID>::cast_const),
             creation_flags,
             thread_id,
         )
@@ -285,10 +300,10 @@ pub fn close_handle(handle: Handle) -> Result<(), Error> {
 #[must_use]
 pub fn get_current_process() -> Handle { unsafe { GetCurrentProcess() } }
 
-/// Allocates a console for the calling process. A process is only able to have
-/// one console, this function will fail if it already has a console. If you
-/// want to get rid of the existing console you should call our `free_console`
-/// function.
+/// Allocates a console for the calling process.
+///
+/// A process is only able to have one console, so this function will fail if it
+/// already has one. Call `free_console` to release an existing console.
 /// # Errors
 pub fn alloc_console() -> Result<(), Error> {
     let success = unsafe { AllocConsole() };
@@ -304,10 +319,11 @@ pub fn free_console() -> Result<(), Error> {
     success.map_err(|_| Error::ConsoleDeallocation(last_error()))
 }
 
-/// Firstly `FreeLibrary` is called which frees the DLL and if needed decrements
-/// the reference count, when the reference count reaches zero the module will
-/// be unloaded from the address space and the handle will no longer be valid
-/// then `ExitThread` will be called to terminate the calling thread.
+/// Frees the DLL and terminates the calling thread.
+///
+/// `FreeLibrary` decrements the reference count. When it reaches zero, the
+/// module is unloaded and the handle becomes invalid. `ExitThread` is then
+/// called to terminate the thread.
 pub fn free_library_and_exit_thread(module_handle: HandleInstance, exit_code: DWORD) {
     unsafe {
         FreeLibraryAndExitThread(module_handle.into(), exit_code);
@@ -431,7 +447,7 @@ pub fn virtual_alloc_ex(
     let res = unsafe {
         VirtualAllocEx(
             handle,
-            address.map(|address| address.cast_const()),
+            address.map(<*mut c_void>::cast_const),
             size,
             allocation_type,
             protection_flags,
