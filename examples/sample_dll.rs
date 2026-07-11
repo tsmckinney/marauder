@@ -11,7 +11,7 @@ fn hack_thread() {
 pub extern "system" fn DllMain(_instance_handle: HandleInstance, dw_reason: DWORD, _lp_reserved: LPVOID) -> bool {
     match dw_reason {
         1u32 => {
-            std::thread::spawn(|| hack_thread());
+            std::thread::spawn(hack_thread);
         },
         _ => return false,
     };

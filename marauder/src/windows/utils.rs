@@ -14,7 +14,7 @@ use crate::{
 /// # Errors
 /// `std::ffi::Error` if an error occurs.
 pub fn convert_windows_string<'a, const N: usize>(string: [i8; N]) -> Result<&'a str, Error> {
-    unsafe { Ok(CStr::from_ptr(string.as_ptr().cast::<i8>()).to_str()?) }
+    unsafe { Ok(CStr::from_ptr(string.as_ptr()).to_str()?) }
 }
 
 /// `get_process_id` returns the ID of the process name.

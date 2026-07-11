@@ -11,9 +11,12 @@ license = "MIT"
 keywords = ["memory", "cheat", "hack", "dll", "injection"]
 
 [dependencies]
-marauder_macros = { path = "../macros", optional = true, version = "0.1.0" }
+marauder-macros = { path = "../macros", optional = true, version = "0.1.0" }
 thiserror = "2.0.18"
-windows = {version = "0.62.2", features = [
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_Threading",
@@ -22,7 +25,10 @@ windows = {version = "0.62.2", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Console",
     "Win32_Graphics_Direct3D9",
+    "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
     "Win32_Graphics_Direct3D10",
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Direct3D12",
@@ -30,7 +36,7 @@ windows = {version = "0.62.2", features = [
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_UI_Input_KeyboardAndMouse"
-]}
+]
 windows-strings = "0.5.1"
 
 [dev-dependencies]
@@ -75,3 +81,19 @@ required-features = ["injector"]
 [[example]]
 name = "target_process"
 path = "../examples/target_process.rs"
+
+[[example]]
+name = "process_info"
+path = "../examples/process_info.rs"
+
+[[example]]
+name = "process_scan"
+path = "../examples/process_scan.rs"
+
+[[example]]
+name = "module_scan"
+path = "../examples/module_scan.rs"
+
+[[example]]
+name = "toy_manual_map"
+path = "../examples/toy_manual_map.rs"

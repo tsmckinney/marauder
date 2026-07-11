@@ -1,5 +1,5 @@
 use marauder::{
-    injector::{Config, Injector},
+    injector::{Config, InjectionMethod, Injector},
     windows::utils::get_process_id,
 };
 
@@ -11,7 +11,13 @@ fn main() {
     if !path.exists() {
         panic!("Could not find a DLL at {}. Please check if such a DLL exists.", dll_path);
     }
-    let config = Config::default();
+    let mut config = Config::default();
+    if std::env::var("load_library_ex").is_ok() {
+        config.injection_method = InjectionMethod::LoadLibraryEx;
+    }
+    if std::env::var("randomize_file_name").is_ok() {
+        config.randomize_file_name = true;
+    }
     let injector = Injector::new(config);
 
     let pid = get_process_id(&process_name).unwrap();

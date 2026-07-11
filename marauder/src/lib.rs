@@ -37,6 +37,8 @@ pub mod hooks;
 pub mod macros;
 
 pub mod error;
+pub mod pattern;
+pub mod process;
 
 // proc macros
 cfg_macros! {
