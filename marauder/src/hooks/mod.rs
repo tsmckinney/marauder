@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use windows::Win32::System::{
     Diagnostics::Debug::FlushInstructionCache,
-    Memory::{VirtualProtect, PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS},
+    Memory::{PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS, VirtualProtect},
     Threading::GetCurrentProcess,
 };
 

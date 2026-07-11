@@ -38,7 +38,7 @@ pub enum Error {
         process_id: u32,
         stage: SnapshotStage,
         #[source]
-        source: Box<Error>,
+        source: Box<Self>,
     },
     #[error("Timeout error")]
     Timeout,

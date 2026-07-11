@@ -166,7 +166,9 @@ impl ToyProcess {
         usize::from_le_bytes(bytes)
     }
 
-    fn write_usize(&mut self, address: usize, value: usize) { self.write(address, &value.to_le_bytes()); }
+    fn write_usize(&mut self, address: usize, value: usize) {
+        self.write(address, &value.to_le_bytes());
+    }
 
     fn dump_region(&self, base: usize, size: usize) {
         let region = self.region(base, size);
@@ -311,4 +313,6 @@ struct ToyTlsCallback {
     rva: usize,
 }
 
-fn align_up(value: usize, alignment: usize) -> usize { (value + alignment - 1) & !(alignment - 1) }
+fn align_up(value: usize, alignment: usize) -> usize {
+    (value + alignment - 1) & !(alignment - 1)
+}

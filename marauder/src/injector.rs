@@ -14,8 +14,9 @@ use crate::{
     error::Error,
     process::Process,
     windows::wrappers::{
-        close_handle, create_remote_thread, get_exit_code_thread, get_module_handle, get_proc_address, read_process_memory,
-        virtual_alloc_ex, virtual_free_ex, wait_for_single_object, write_process_memory, LPThreadStartRoutine, LPVOID,
+        LPThreadStartRoutine, LPVOID, LPCVOID, close_handle, create_remote_thread, get_exit_code_thread, get_module_handle,
+        get_proc_address, read_process_memory, virtual_alloc_ex, virtual_free_ex, wait_for_single_object,
+        write_process_memory,
     },
 };
 
@@ -210,7 +211,9 @@ impl RemoteAllocation {
 }
 
 impl Drop for RemoteAllocation {
-    fn drop(&mut self) { let _ = virtual_free_ex(self.process, self.address, 0, MEM_RELEASE); }
+    fn drop(&mut self) {
+        let _ = virtual_free_ex(self.process, self.address, 0, MEM_RELEASE);
+    }
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -263,17 +266,13 @@ fn inject_load_library_ex_x64(
 fn inject_load_library(process_handle: crate::windows::wrappers::Handle, remote_path: LPVOID) -> Result<(), Error> {
     let load_library_address = get_proc_address(get_module_handle("Kernel32.dll")?, "LoadLibraryA")?;
     let exit_code = run_remote_thread(process_handle, load_library_address as LPVOID, Some(remote_path))?;
-    if exit_code == 0 {
-        Err(Error::InjectionFailed)
-    } else {
-        Ok(())
-    }
+    if exit_code == 0 { Err(Error::InjectionFailed) } else { Ok(()) }
 }
 
 fn run_remote_thread(
     process_handle: crate::windows::wrappers::Handle,
     start_address: LPVOID,
-    parameter: Option<LPVOID>,
+    parameter: Option<LPCVOID>,
 ) -> Result<u32, Error> {
     let thread_handle = unsafe {
         let start_routine = std::mem::transmute::<LPVOID, LPThreadStartRoutine>(start_address);

@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    mem::{size_of, size_of_val, MaybeUninit},
+    mem::{MaybeUninit, size_of, size_of_val},
 };
 
 use windows::Win32::System::{
@@ -18,10 +18,11 @@ use crate::{
     windows::{
         utils::convert_windows_string,
         wrappers::{
-            close_handle, create_tool_help32_snapshot, get_process_id, module32_first, module32_next, open_process,
-            process32_first, process32_next, read_process_memory, virtual_alloc_ex, virtual_free_ex, virtual_protect_ex,
-            virtual_query_ex, write_process_memory, Handle, MemoryBasicInformation, ModuleEntry32, PageProtectionFlags,
-            PageType, ProcessAccessRights, ProcessEntry32, VirtualAllocationType, DWORD_PTR, LPVOID,
+            DWORD_PTR, Handle, LPVOID, MemoryBasicInformation, ModuleEntry32, PageProtectionFlags, PageType,
+            ProcessAccessRights, ProcessEntry32, VirtualAllocationType, close_handle, create_tool_help32_snapshot,
+            get_process_id, module32_first, module32_next, open_process, process32_first, process32_next,
+            read_process_memory, virtual_alloc_ex, virtual_free_ex, virtual_protect_ex, virtual_query_ex,
+            write_process_memory,
         },
     },
 };
@@ -40,16 +41,24 @@ pub struct ProcessAccess;
 
 impl ProcessAccess {
     #[must_use]
-    pub const fn all() -> ProcessAccessRights { PROCESS_ALL_ACCESS }
+    pub const fn all() -> ProcessAccessRights {
+        PROCESS_ALL_ACCESS
+    }
 
     #[must_use]
-    pub const fn query() -> ProcessAccessRights { PROCESS_QUERY_INFORMATION }
+    pub const fn query() -> ProcessAccessRights {
+        PROCESS_QUERY_INFORMATION
+    }
 
     #[must_use]
-    pub fn read() -> ProcessAccessRights { PROCESS_QUERY_INFORMATION | PROCESS_VM_READ }
+    pub fn read() -> ProcessAccessRights {
+        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ
+    }
 
     #[must_use]
-    pub fn write() -> ProcessAccessRights { PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE }
+    pub fn write() -> ProcessAccessRights {
+        PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE
+    }
 
     #[must_use]
     pub fn read_write() -> ProcessAccessRights {
@@ -80,13 +89,17 @@ unsafe impl<T: PlainOldData, const N: usize> PlainOldData for [T; N] {}
 
 impl Process {
     #[must_use]
-    pub fn current_id() -> u32 { std::process::id() }
+    pub fn current_id() -> u32 {
+        std::process::id()
+    }
 
     /// Opens the current process with explicit access rights.
     ///
     /// # Errors
     /// Returns an error if Windows refuses to open the current process.
-    pub fn current(access: ProcessAccessRights) -> Result<Self, Error> { Self::open(Self::current_id(), access) }
+    pub fn current(access: ProcessAccessRights) -> Result<Self, Error> {
+        Self::open(Self::current_id(), access)
+    }
 
     /// Opens a process with explicit access rights.
     ///
@@ -111,7 +124,9 @@ impl Process {
     ///
     /// # Errors
     /// Returns an error if Windows refuses to open the process.
-    pub fn open_all_access(process_id: u32) -> Result<Self, Error> { Self::open(process_id, ProcessAccess::all()) }
+    pub fn open_all_access(process_id: u32) -> Result<Self, Error> {
+        Self::open(process_id, ProcessAccess::all())
+    }
 
     /// Lists processes visible through a `ToolHelp` snapshot.
     ///
@@ -162,7 +177,9 @@ impl Process {
     ///
     /// # Errors
     /// Returns an error if Windows cannot query the process id.
-    pub fn id(&self) -> Result<u32, Error> { get_process_id(self.handle) }
+    pub fn id(&self) -> Result<u32, Error> {
+        get_process_id(self.handle)
+    }
 
     /// Returns snapshot metadata for the opened process.
     ///
@@ -178,17 +195,25 @@ impl Process {
     }
 
     #[must_use]
-    pub const fn memory(&self) -> ProcessMemory<'_> { ProcessMemory { process: self } }
+    pub const fn memory(&self) -> ProcessMemory<'_> {
+        ProcessMemory { process: self }
+    }
 
     #[must_use]
-    pub const fn modules(&self) -> ProcessModules<'_> { ProcessModules { process: self } }
+    pub const fn modules(&self) -> ProcessModules<'_> {
+        ProcessModules { process: self }
+    }
 
     #[must_use]
-    pub const fn handle(&self) -> Handle { self.handle }
+    pub const fn handle(&self) -> Handle {
+        self.handle
+    }
 }
 
 impl Drop for Process {
-    fn drop(&mut self) { let _ = close_handle(self.handle); }
+    fn drop(&mut self) {
+        let _ = close_handle(self.handle);
+    }
 }
 
 /// Memory operations scoped to a process handle.
@@ -413,7 +438,9 @@ impl ProcessMemory<'_> {
     ///
     /// # Errors
     /// Returns an error if Windows cannot read enough bytes for `T`.
-    pub fn read_pod<T: PlainOldData>(&self, address: DWORD_PTR) -> Result<T, Error> { self.read_value(address) }
+    pub fn read_pod<T: PlainOldData>(&self, address: DWORD_PTR) -> Result<T, Error> {
+        self.read_value(address)
+    }
 
     /// Reads `count` plain-old-data values from the process.
     ///
@@ -597,13 +624,19 @@ pub struct ProcessAllocation {
 
 impl ProcessAllocation {
     #[must_use]
-    pub const fn address(&self) -> LPVOID { self.address }
+    pub const fn address(&self) -> LPVOID {
+        self.address
+    }
 
     #[must_use]
-    pub fn address_usize(&self) -> DWORD_PTR { self.address as DWORD_PTR }
+    pub fn address_usize(&self) -> DWORD_PTR {
+        self.address as DWORD_PTR
+    }
 
     #[must_use]
-    pub const fn size(&self) -> usize { self.size }
+    pub const fn size(&self) -> usize {
+        self.size
+    }
 
     #[must_use]
     pub fn range(&self) -> MemoryRange {
@@ -614,10 +647,14 @@ impl ProcessAllocation {
     }
 
     #[must_use]
-    pub fn end_address(&self) -> DWORD_PTR { self.range().end_address() }
+    pub fn end_address(&self) -> DWORD_PTR {
+        self.range().end_address()
+    }
 
     #[must_use]
-    pub fn contains(&self, address: DWORD_PTR, size: usize) -> bool { self.range().contains(address, size) }
+    pub fn contains(&self, address: DWORD_PTR, size: usize) -> bool {
+        self.range().contains(address, size)
+    }
 
     /// Releases this allocation before drop.
     ///
@@ -644,7 +681,9 @@ impl fmt::Display for ProcessAllocation {
 }
 
 impl Drop for ProcessAllocation {
-    fn drop(&mut self) { let _ = virtual_free_ex(self.process, self.address, 0, MEM_RELEASE); }
+    fn drop(&mut self) {
+        let _ = virtual_free_ex(self.process, self.address, 0, MEM_RELEASE);
+    }
 }
 
 /// Scoped memory protection change for a process range.
@@ -658,13 +697,19 @@ pub struct ProcessProtectionGuard {
 
 impl ProcessProtectionGuard {
     #[must_use]
-    pub const fn address(&self) -> DWORD_PTR { self.address }
+    pub const fn address(&self) -> DWORD_PTR {
+        self.address
+    }
 
     #[must_use]
-    pub const fn size(&self) -> usize { self.size }
+    pub const fn size(&self) -> usize {
+        self.size
+    }
 
     #[must_use]
-    pub const fn old_protection(&self) -> PageProtectionFlags { self.old_protection }
+    pub const fn old_protection(&self) -> PageProtectionFlags {
+        self.old_protection
+    }
 
     /// Restores the previous protection before drop.
     ///
@@ -694,7 +739,9 @@ impl ProcessProtectionGuard {
 }
 
 impl Drop for ProcessProtectionGuard {
-    fn drop(&mut self) { let _ = self.restore_inner(); }
+    fn drop(&mut self) {
+        let _ = self.restore_inner();
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -722,13 +769,19 @@ impl MemoryRegion {
     }
 
     #[must_use]
-    pub fn is_committed(&self) -> bool { self.state == MEM_COMMIT }
+    pub fn is_committed(&self) -> bool {
+        self.state == MEM_COMMIT
+    }
 
     #[must_use]
-    pub const fn is_guarded(&self) -> bool { self.has_protection(PAGE_GUARD) }
+    pub const fn is_guarded(&self) -> bool {
+        self.has_protection(PAGE_GUARD)
+    }
 
     #[must_use]
-    pub const fn is_no_access(&self) -> bool { self.has_protection(PAGE_NOACCESS) }
+    pub const fn is_no_access(&self) -> bool {
+        self.has_protection(PAGE_NOACCESS)
+    }
 
     #[must_use]
     pub fn is_readable(&self) -> bool {
@@ -767,13 +820,19 @@ impl MemoryRegion {
     }
 
     #[must_use]
-    pub fn access(&self) -> MemoryAccess { MemoryAccess::from_region(self) }
+    pub fn access(&self) -> MemoryAccess {
+        MemoryAccess::from_region(self)
+    }
 
     #[must_use]
-    pub const fn range(&self) -> MemoryRange { MemoryRange::from_region(self) }
+    pub const fn range(&self) -> MemoryRange {
+        MemoryRange::from_region(self)
+    }
 
     #[must_use]
-    pub const fn end_address(&self) -> DWORD_PTR { self.base_address.saturating_add(self.size) }
+    pub const fn end_address(&self) -> DWORD_PTR {
+        self.base_address.saturating_add(self.size)
+    }
 
     #[must_use]
     pub const fn contains(&self, address: DWORD_PTR, size: usize) -> bool {
@@ -784,7 +843,9 @@ impl MemoryRegion {
         flags.iter().any(|flag| self.has_protection(*flag))
     }
 
-    const fn has_protection(&self, flag: PageProtectionFlags) -> bool { self.protect.0 & flag.0 == flag.0 }
+    const fn has_protection(&self, flag: PageProtectionFlags) -> bool {
+        self.protect.0 & flag.0 == flag.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -820,19 +881,29 @@ impl MemoryAccess {
     }
 
     #[must_use]
-    pub const fn is_readable(self) -> bool { self.bits & Self::READ == Self::READ }
+    pub const fn is_readable(self) -> bool {
+        self.bits & Self::READ == Self::READ
+    }
 
     #[must_use]
-    pub const fn is_writable(self) -> bool { self.bits & Self::WRITE == Self::WRITE }
+    pub const fn is_writable(self) -> bool {
+        self.bits & Self::WRITE == Self::WRITE
+    }
 
     #[must_use]
-    pub const fn is_executable(self) -> bool { self.bits & Self::EXECUTE == Self::EXECUTE }
+    pub const fn is_executable(self) -> bool {
+        self.bits & Self::EXECUTE == Self::EXECUTE
+    }
 
     #[must_use]
-    pub const fn is_guarded(self) -> bool { self.bits & Self::GUARD == Self::GUARD }
+    pub const fn is_guarded(self) -> bool {
+        self.bits & Self::GUARD == Self::GUARD
+    }
 
     #[must_use]
-    pub const fn is_no_access(self) -> bool { self.bits & Self::NO_ACCESS == Self::NO_ACCESS }
+    pub const fn is_no_access(self) -> bool {
+        self.bits & Self::NO_ACCESS == Self::NO_ACCESS
+    }
 }
 
 impl fmt::Display for MemoryAccess {
@@ -893,7 +964,9 @@ impl ProcessModules<'_> {
     ///
     /// # Errors
     /// Returns an error if Windows cannot enumerate modules.
-    pub fn main(&self) -> Result<ModuleInfo, Error> { self.list()?.into_iter().next().ok_or(Error::ProcessNotFound) }
+    pub fn main(&self) -> Result<ModuleInfo, Error> {
+        self.list()?.into_iter().next().ok_or(Error::ProcessNotFound)
+    }
 
     /// Finds the first module with a case-insensitive matching name.
     ///
@@ -931,19 +1004,25 @@ pub struct ProcessInfo {
 
 impl ProcessInfo {
     #[must_use]
-    pub fn is_current(&self) -> bool { self.id == Process::current_id() }
+    pub fn is_current(&self) -> bool {
+        self.id == Process::current_id()
+    }
 
     /// Opens this process snapshot entry with explicit access rights.
     ///
     /// # Errors
     /// Returns an error if Windows refuses to open the process.
-    pub fn open(&self, access: ProcessAccessRights) -> Result<Process, Error> { Process::open(self.id, access) }
+    pub fn open(&self, access: ProcessAccessRights) -> Result<Process, Error> {
+        Process::open(self.id, access)
+    }
 
     /// Opens this process snapshot entry with `PROCESS_ALL_ACCESS`.
     ///
     /// # Errors
     /// Returns an error if Windows refuses to open the process.
-    pub fn open_all_access(&self) -> Result<Process, Error> { self.open(ProcessAccess::all()) }
+    pub fn open_all_access(&self) -> Result<Process, Error> {
+        self.open(ProcessAccess::all())
+    }
 
     fn from_entry(entry: &ProcessEntry32) -> Result<Self, Error> {
         Ok(Self {
@@ -974,7 +1053,9 @@ impl ModuleInfo {
     }
 
     #[must_use]
-    pub const fn end_address(&self) -> DWORD_PTR { self.base_address.saturating_add(self.size) }
+    pub const fn end_address(&self) -> DWORD_PTR {
+        self.base_address.saturating_add(self.size)
+    }
 
     #[must_use]
     pub const fn contains(&self, address: DWORD_PTR, size: usize) -> bool {
@@ -1034,7 +1115,9 @@ impl MemoryRange {
     }
 
     #[must_use]
-    pub const fn end_address(&self) -> DWORD_PTR { self.base_address.saturating_add(self.size) }
+    pub const fn end_address(&self) -> DWORD_PTR {
+        self.base_address.saturating_add(self.size)
+    }
 
     #[must_use]
     pub const fn contains(&self, address: DWORD_PTR, size: usize) -> bool {
@@ -1067,7 +1150,9 @@ impl Snapshot {
 }
 
 impl Drop for Snapshot {
-    fn drop(&mut self) { let _ = close_handle(self.handle); }
+    fn drop(&mut self) {
+        let _ = close_handle(self.handle);
+    }
 }
 
 fn snapshot_error(kind: SnapshotKind, process_id: u32, stage: SnapshotStage, source: Error) -> Error {
@@ -1223,9 +1308,11 @@ mod tests {
         let matches = process.memory().scan_region(&region, &pattern).expect("scan marker region");
 
         assert!(matches.iter().any(|match_| match_.address == marker_address));
-        assert!(matches
-            .iter()
-            .all(|match_| match_.range.contains(match_.address, pattern.len())));
+        assert!(
+            matches
+                .iter()
+                .all(|match_| match_.range.contains(match_.address, pattern.len()))
+        );
     }
 
     #[test]
@@ -1293,9 +1380,11 @@ mod tests {
         assert_eq!(allocation.range().size, allocation.size());
         assert_eq!(allocation.end_address(), allocation.address_usize() + allocation.size());
         assert!(allocation.contains(allocation.address_usize(), allocation.size()));
-        assert!(allocation
-            .to_string()
-            .contains(&format!("0x{:x}", allocation.address_usize())));
+        assert!(
+            allocation
+                .to_string()
+                .contains(&format!("0x{:x}", allocation.address_usize()))
+        );
     }
 
     #[test]

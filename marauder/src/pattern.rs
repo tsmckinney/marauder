@@ -23,10 +23,14 @@ impl Pattern {
     }
 
     #[must_use]
-    pub const fn len(&self) -> usize { self.bytes.len() }
+    pub const fn len(&self) -> usize {
+        self.bytes.len()
+    }
 
     #[must_use]
-    pub const fn is_empty(&self) -> bool { self.bytes.is_empty() }
+    pub const fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
+    }
 
     #[must_use]
     pub fn matches_at(&self, haystack: &[u8], offset: usize) -> bool {

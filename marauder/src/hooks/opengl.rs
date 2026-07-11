@@ -1,8 +1,8 @@
 use std::ffi::CString;
 
 use windows::{
-    core::PCSTR,
     Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress},
+    core::PCSTR,
 };
 
 use crate::{

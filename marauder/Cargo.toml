@@ -11,8 +11,9 @@ license = "MIT"
 keywords = ["memory", "cheat", "hack", "dll", "injection"]
 
 [dependencies]
-marauder-macros = { path = "../macros", optional = true, version = "0.1.0" }
+marauder_macros = { path = "../macros", optional = true, version = "0.1.0" }
 thiserror = "2.0.18"
+windows-strings = "0.5.1"
 
 [dependencies.windows]
 version = "0.62.2"

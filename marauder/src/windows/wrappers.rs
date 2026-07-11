@@ -7,7 +7,6 @@
 use std::{ffi::CString, os::raw::c_void};
 
 use windows::{
-    core::PCSTR,
     Win32::{
         Foundation::{CloseHandle, GetLastError, HANDLE, HINSTANCE, HMODULE, WAIT_FAILED},
         Security::SECURITY_ATTRIBUTES,
@@ -16,24 +15,24 @@ use windows::{
             Diagnostics::{
                 Debug::{ReadProcessMemory, WriteProcessMemory},
                 ToolHelp::{
-                    CreateToolhelp32Snapshot, Module32First, Module32Next, Process32First, Process32Next,
-                    CREATE_TOOLHELP_SNAPSHOT_FLAGS, MODULEENTRY32, PROCESSENTRY32,
+                    CREATE_TOOLHELP_SNAPSHOT_FLAGS, CreateToolhelp32Snapshot, MODULEENTRY32, Module32First, Module32Next,
+                    PROCESSENTRY32, Process32First, Process32Next,
                 },
             },
             LibraryLoader::{DisableThreadLibraryCalls, FreeLibraryAndExitThread, GetModuleHandleA, GetProcAddress},
             Memory::{
-                VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx, MEMORY_BASIC_INFORMATION,
-                PAGE_PROTECTION_FLAGS, PAGE_TYPE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
+                MEMORY_BASIC_INFORMATION, PAGE_PROTECTION_FLAGS, PAGE_TYPE, VIRTUAL_ALLOCATION_TYPE, VIRTUAL_FREE_TYPE,
+                VirtualAllocEx, VirtualFreeEx, VirtualProtect, VirtualProtectEx, VirtualQueryEx,
             },
             Threading::{
-                CreateRemoteThread, CreateThread, GetCurrentProcess, GetExitCodeThread, GetProcessId, OpenProcess,
-                WaitForSingleObject, LPTHREAD_START_ROUTINE, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS,
+                CreateRemoteThread, CreateThread, GetCurrentProcess, GetExitCodeThread, GetProcessId,
+                LPTHREAD_START_ROUTINE, OpenProcess, PROCESS_ACCESS_RIGHTS, THREAD_CREATION_FLAGS, WaitForSingleObject,
             },
         },
         UI::Input::KeyboardAndMouse::GetAsyncKeyState,
     },
+    core::PCSTR,
 };
-use windows_strings::PCSTR;
 
 use crate::error::Error;
 
@@ -113,9 +112,13 @@ pub type CreateToolhelpSnapshotFlags = CREATE_TOOLHELP_SNAPSHOT_FLAGS;
 /// this type's size; otherwise, the function *will fail.*
 pub type ModuleEntry32 = MODULEENTRY32;
 
-fn last_error() -> u32 { unsafe { GetLastError().0 } }
+fn last_error() -> u32 {
+    unsafe { GetLastError().0 }
+}
 
-fn pcstr(string: &str) -> Result<CString, Error> { Ok(CString::new(string)?) }
+fn pcstr(string: &str) -> Result<CString, Error> {
+    Ok(CString::new(string)?)
+}
 
 /// `get_module_handle` will get the handle of a module.
 ///
@@ -207,11 +210,7 @@ pub fn virtual_protect(
 pub fn wait_for_single_object(handle: Handle, milliseconds: u32) -> Result<u32, Error> {
     let res = unsafe { WaitForSingleObject(handle, milliseconds) };
 
-    if res == WAIT_FAILED {
-        Err(Error::Timeout)
-    } else {
-        Ok(res.0)
-    }
+    if res == WAIT_FAILED { Err(Error::Timeout) } else { Ok(res.0) }
 }
 
 /// Retrieves the termination status of the specified thread.
@@ -249,10 +248,10 @@ pub fn create_remote_thread(
     let handle = unsafe {
         CreateRemoteThread(
             process,
-            thread_attributes.map(<*mut SecurityAttributes>::cast_const),
+            thread_attributes.map(<*const SecurityAttributes>::cast),
             stack_size,
             start_address,
-            parameter.map(<LPVOID>::cast_const),
+            parameter.map(<LPCVOID>::cast),
             creation_flags,
             thread_id,
         )
@@ -282,10 +281,10 @@ pub fn create_thread(
 ) -> Result<Handle, Error> {
     let res = unsafe {
         CreateThread(
-            thread_attributes.map(<*mut SecurityAttributes>::cast_const),
+            thread_attributes.map(<*const SecurityAttributes>::cast),
             stack_size,
             start_address,
-            parameter.map(<LPVOID>::cast_const),
+            parameter.map(<LPCVOID>::cast),
             creation_flags,
             thread_id,
         )
@@ -457,7 +456,7 @@ pub fn virtual_alloc_ex(
     let res = unsafe {
         VirtualAllocEx(
             handle,
-            address.map(<*mut c_void>::cast_const),
+            address.map(<*const c_void>::cast),
             size,
             allocation_type,
             protection_flags,
